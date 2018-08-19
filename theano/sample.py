@@ -10,14 +10,11 @@ import matplotlib.pyplot as plt
 
 import numpy
 
-from nmt import\
-    RNNEncoderDecoder,\
-    prototype_state,\
-    parse_input
+from model import RNNEncoderDecoder, prototype_state
+from helper import parse_input
 
 from numpy import argpartition
 from analysis import bleu_analyze
-#from bleu_scorer import BleuScorer
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +40,7 @@ class BeamSearch(object):
 #         self.wordidf_dict_src = pickle.load(open(state['word_weight'],'rb'))
 #         #plt.hist(self.wordidf_dict_src.values())
 #         #plt.show()
-         self.wordidf_dict_tar = pickle.load(open(state['word_weight_trgt'],'rb'))
+        self.wordidf_dict_tar = pickle.load(open(state['word_weight_trgt'],'rb'))
 #         max_wordidx=max(self.wordidf_dict_src.keys())
 #         self.wordidf_array_src=numpy.zeros(max_wordidx+2)
 #         for idx in self.wordidf_dict_src.keys():
@@ -86,11 +83,10 @@ class BeamSearch(object):
             #compute the prob of all next words given the context vector c, the time step k, current hidden states, and each 'last word'
             #the resulting log probs is s*v dimension, where s is the number of current temp translations(beam size) and v is vocabulary size
             
-             if k>0:
+            if k>0:
                 for wordid in self.wordidf_dict_tar.keys():
-                     log_probs[:,wordid]+=0.035*self.wordidf_dict_tar.get(wordid,0.0)
+                    log_probs[:,wordid]+=0.035*self.wordidf_dict_tar.get(wordid,0.0)
                     
-            
             
             # Adjust log probs according to search restrictions
             if ignore_unk:
@@ -212,12 +208,12 @@ def sample(lm_model, seq, n_samples,
 
 
 def parse_args():
-    '''--state D:/workspace/Code2Doc/resources/data/github/apiseq/models/search_desc2apiseq_state.pkl 
-    --model_path D:/workspace/Code2Doc/resources/data/github/apiseq/models/search_desc2apiseq_model.npz 
-    --source D:/workspace/Code2Doc/resources/data/github/apiseq/test.desc.shuf.txt 
-    --trans D:/workspace/Code2Doc/resources/data/github/apiseq/result.apiseq.shuf.txt 
-    --validate D:/workspace/Code2Doc/resources/data/github/apiseq/test.apiseq.shuf.txt'''
-    defaultfolder='D:/workspace/Code2Doc/resources/data/github/apiseq/'
+    '''--state ./data/github/apiseq/models/search_desc2apiseq_state.pkl 
+    --model_path ./data/github/apiseq/models/search_desc2apiseq_model.npz 
+    --source ./data/github/apiseq/test.desc.shuf.txt 
+    --trans ./data/github/apiseq/result.apiseq.shuf.txt 
+    --validate ./data/github/apiseq/test.apiseq.shuf.txt'''
+    defaultfolder='./data/github/apiseq/'
     defaultstate=defaultfolder+'model/search_desc2apiseq_state.pkl'
     defaultmodel=defaultfolder+'model/search_desc2apiseq_model.npz'
     defaultsource=defaultfolder+'test.desc.shuf.txt'
@@ -251,8 +247,8 @@ def parse_args():
 def main():
     args = parse_args()
     # Sample args: 
-    # --state D:\workspace\...\resources\data\msrasql_cs\phrase_state.pkl  
-    # --beam-search --model_path D:\workspace\...\resources\data\msrasql_cs\phrase_model.npz
+    # --state .\data\github\phrase_state.pkl  
+    # --beam-search --model_path .\data\github\phrase_model.npz
 
     state = prototype_state()
     with open(args.state) as src:

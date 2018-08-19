@@ -1,1 +1,1 @@
-from LM_model import LM_Model
+from .LM_model import LM_Model

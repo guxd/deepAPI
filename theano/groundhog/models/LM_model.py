@@ -15,7 +15,7 @@ import numpy
 import itertools
 import logging
 
-import cPickle as pkl
+import pickle as pkl
 
 import theano
 import theano.tensor as TT

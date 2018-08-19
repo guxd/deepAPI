@@ -16,7 +16,7 @@ import copy
 import logging
 
 import threading
-import Queue
+from multiprocessing import Queue
 
 import collections
 
@@ -143,7 +143,7 @@ class TMIterator(object):
                         sents = sents.T
                     target_data.append(sents)
                 if inc_offset > self.data_len and self.use_infinite_loop:
-                    print "Restarting the dataset iterator."
+                    print ("Restarting the dataset iterator.")
                     inc_offset = 0 #self.offset + self.batch_size
                 elif inc_offset > self.data_len:
                     self.offset = 0
@@ -241,7 +241,7 @@ class PytablesBitextIterator(object):
         self.exit_flag = False
 
     def start(self, start_offset):
-        self.queue = Queue.Queue(maxsize=self.queue_size)
+        self.queue = Queue(maxsize=self.queue_size)
         self.gather = PytablesBitextFetcher(self, start_offset)
         self.gather.daemon = True
         self.gather.start()
@@ -319,7 +319,7 @@ class NNJMContextIterator(object):
             while True:
                 inc_offset = self.offset + self.batch_size
                 if inc_offset > self.data_len and self.use_infinite_loop:
-                    print "Restarting the dataset iterator."
+                    print ("Restarting the dataset iterator.")
                     inc_offset = 0
                 elif inc_offset > self.data_len:
                     self.offset = 0

@@ -139,7 +139,7 @@ class LMIterator(object):
         if self.reset is not None and self.reset > 0:
             self.data = self.data[:self.reset]
             self.data_len = self.data.shape[0]
-        print "data length is ", self.data_len
+        print ("data length is ", self.data_len)
         del penn_data
 
     def get_length(self):
@@ -164,7 +164,7 @@ class LMIterator(object):
                         not self.allow_short_sequences)
 
         if cond and self.use_infinite_loop:
-            print "Restarting the dataset iterator."
+            print ("Restarting the dataset iterator.")
             self.offset = 0
             reset_h0 = 1
             inc_offset = self.offset+self.batch_size*self.seq_len

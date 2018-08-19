@@ -28,12 +28,12 @@ sys.stdout = Unbuffered(sys.stdout)
 
 # Generic imports
 import numpy
-import cPickle
+import pickle
 import gzip
 import time
 import signal
 
-from groundhog.utils import print_mem, print_time
+from groundhog.utils import print_time #,print_mem
 
 
 class MainLoop(object):
@@ -118,12 +118,12 @@ class MainLoop(object):
 
         if self.state['validFreq'] < 0:
             self.state['validFreq'] = self.train_data.get_length()
-            print 'Validation computed every', self.state['validFreq']
+            print ('Validation computed every', self.state['validFreq'])
         elif self.state['validFreq'] > 0:
-            print 'Validation computed every', self.state['validFreq']
+            print ('Validation computed every', self.state['validFreq'])
         if self.state['trainFreq'] < 0:
             self.state['trainFreq'] = self.train_data.get_length()
-            print 'Train frequency set to ', self.state['trainFreq']
+            print ('Train frequency set to ', self.state['trainFreq'])
 
         state['bvalidcost'] = 1e21
         for (pname, _) in model.properties:
@@ -167,7 +167,7 @@ class MainLoop(object):
             self.state['valid'+k] = float(v)
         msg += 'whole time %s' % print_time(time.time() - self.start_time)
         msg += ' patience %d' % self.patience
-        print msg
+        print (msg)
 
         if self.train_cost:
             valid_rvals = rvals
@@ -177,7 +177,7 @@ class MainLoop(object):
                 msg = msg + ' ' + k + ':%6.3f ' % float(v)
                 self.timings['fulltrain' + k] = float(v)
                 self.state['fulltrain' + k] = float(v)
-            print msg
+            print (msg)
             rvals = valid_rvals
 
         self.state['validtime'] = float(time.time() - self.start_time)/60.
@@ -191,10 +191,10 @@ class MainLoop(object):
             self.state['btime'] = int(time.time() - self.start_time)
             self.test()
         else:
-            print 'No testing', cost, '>', self.state['bvalidcost']
+            print ('No testing', cost, '>', self.state['bvalidcost'])
             for k, v in self.state.items():
                 if 'test' in k:
-                    print k, v
+                    print (k, v)
         print_mem('validate')
         if self.validate_postprocess:
             return self.validate_postprocess(cost)
@@ -216,12 +216,12 @@ class MainLoop(object):
             msg = msg + ' ' + k + ':%6.3f ' % v
             self.timings['test' + k][pos] = float(v)
             self.state['test' + k] = float(v)
-        print msg
+        print (msg)
         self.state['testtime'] = float(time.time()-self.start_time)/60.
 
     def save(self):
         start = time.time()
-        print "Saving the model..."
+        print ("Saving the model...")
 
         # ignore keyboard interrupt while saving
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -232,11 +232,11 @@ class MainLoop(object):
         else:
             self.model.save(self.state['datafolder']+self.state['prefix'] +
                             'model%d.npz' % self.save_iter)
-        cPickle.dump(self.state, open(self.state['datafolder']+self.state['prefix']+'state.pkl', 'w'))
+        pickle.dump(self.state, open(self.state['datafolder']+self.state['prefix']+'state.pkl', 'wb'))
         self.save_iter += 1
         signal.signal(signal.SIGINT, s)
 
-        print "Model saved, took {}".format(time.time() - start)
+        print ("Model saved, took {}".format(time.time() - start))
 
     # FIXME
     def load(self, model_path=None, timings_path=None):
@@ -247,7 +247,7 @@ class MainLoop(object):
         try:
             self.model.load(model_path)
         except Exception:
-            print 'mainLoop: Corrupted model file'
+            print ('mainLoop: Corrupted model file')
             traceback.print_exc()
         try:
 #!!!!! [vulnerable code] The following 7 lines are self-augmented in case of increasing maximum iterations !!!
@@ -259,13 +259,13 @@ class MainLoop(object):
                     timings[key]=tt
             self.timings=timings
         except Exception:
-            print 'mainLoop: Corrupted timings file'
+            print ('mainLoop: Corrupted timings file')
             traceback.print_exc()
 
     def main(self):
         assert self.reset == -1
 
-        print_mem('start')
+        #print_mem('start')
         self.state['gotNaN'] = 0
         start_time = time.time()
         self.start_time = start_time
@@ -285,9 +285,7 @@ class MainLoop(object):
 
         last_cost = 1.
         self.state['clr'] = self.state['lr']
-        self.train_data.start(self.timings['next_offset']
-                if 'next_offset' in self.timings
-                else -1)
+        self.train_data.start(self.timings['next_offset'] if 'next_offset' in self.timings else -1)
 
         while (self.step < self.state['loopIters'] and
                last_cost > .1*self.state['minerr'] and
@@ -316,13 +314,12 @@ class MainLoop(object):
                             numpy.mean(param.get_value() ** 2) ** 0.5
 
                 if (numpy.isinf(rvals['cost']) or
-                   numpy.isnan(rvals['cost'])) and\
-                   self.state['on_nan'] == 'raise':
+                   numpy.isnan(rvals['cost'])) and self.state['on_nan'] == 'raise':
                     self.state['gotNaN'] = 1
                     self.save()
                     if self.channel:
                         self.channel.save()
-                    print 'Got NaN while training'
+                    print ('Got NaN while training')
                     last_cost = 0
                 if self.valid_data is not None and\
                    self.step % self.state['validFreq'] == 0 and\
@@ -347,12 +344,11 @@ class MainLoop(object):
                             p.set_value(bparams[p.name])
 
                 if self.state['hookFreq'] > 0 and \
-                   self.step % self.state['hookFreq'] == 0 and \
-                   self.hooks:
+                   self.step % self.state['hookFreq'] == 0 and self.hooks:
                     [fn() for fn in self.hooks]
                 if self.reset > 0 and self.step > 1 and \
                    self.step % self.reset == 0:
-                    print 'Resetting the data iterator'
+                    print ('Resetting the data iterator')
                     self.train_data.reset()
 
                 self.step += 1
@@ -367,9 +363,9 @@ class MainLoop(object):
         self.save()
         if self.channel:
             self.channel.save()
-        print 'Took', (time.time() - start_time)/60., 'min'
+        print ('Took', (time.time() - start_time)/60., 'min')
         avg_step = self.timings['time_step'][:self.step].mean()
         avg_cost2expl = self.timings['log2_p_expl'][:self.step].mean()
-        print "Average step took {}".format(avg_step)
-        print "That amounts to {} sentences in a day".format(1 / avg_step * 86400 * self.state['bs'])
-        print "Average log2 per example is {}".format(avg_cost2expl)
+        print ("Average step took {}".format(avg_step))
+        print ("That amounts to {} sentences in a day".format(1 / avg_step * 86400 * self.state['bs']))
+        print ("Average log2 per example is {}".format(avg_cost2expl))

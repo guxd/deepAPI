@@ -19,7 +19,7 @@ import theano.tensor as TT
 from theano import scan
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
-from groundhog.utils import print_time, print_mem, const
+from groundhog.utils import print_time, const
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class SGD(object):
                     dtype=x.dtype),name=x.name) for x in model.inputs]
         #training data stored in gpu. They are defined as shared variables from the 
         #'inputs' variable in the encoder-decoder model.
-	if 'profile' not in self.state:
+        if 'profile' not in self.state:
             self.state['profile'] = 0
 
         ###################################
@@ -91,7 +91,7 @@ class SGD(object):
         self.update_rules = [x[1] for x in model.updates]
         rval = theano.clone(model.param_grads + self.update_rules + \
                             self.prop_exprs + [model.train_cost],
-                            replace=zip(model.inputs, loc_data))
+                            replace={k:v for k, v in zip(model.inputs, loc_data)})
         nparams = len(model.params)
         nouts = len(self.prop_exprs)
         nrules = len(self.update_rules)
@@ -124,7 +124,7 @@ class SGD(object):
 
         # grad2
         gnorm2_up = [rho * gn2 + (1. - rho) * (g ** 2.) for gn2,g in zip(self.gnorm2, gs)]
-        updates = updates + zip(self.gnorm2, gnorm2_up)
+        updates = updates + [(gn1, gn2) for gn1, gn2 in zip(self.gnorm2, gnorm2_up)]
 
         logger.debug('Compiling grad function')
         st = time.time()
@@ -139,10 +139,9 @@ class SGD(object):
                 for p, g, gn2, dn2 in
                 zip(model.params, self.gs, self.gnorm2, self.dnorm2)]
 
-        updates = zip(model.params, new_params)
+        updates = [(a, b) for a, b in zip(model.params, new_params)]
         # d2
-        d2_up = [(dn2, rho * dn2 + (1. - rho) *
-            (((TT.sqrt(dn2 + eps) / TT.sqrt(gn2 + eps)) * g) ** 2.))
+        d2_up = [(dn2, rho * dn2 + (1. - rho)*(((TT.sqrt(dn2 + eps) / TT.sqrt(gn2 + eps)) * g) ** 2.))
             for dn2, gn2, g in zip(self.dnorm2, self.gnorm2, self.gs)]
         updates = updates + d2_up
 
@@ -199,11 +198,13 @@ class SGD(object):
             vals += [print_time(g_ed - g_st),
                      print_time(whole_time),
                      float(self.lr)]
-            print msg % tuple(vals)
+            print(msg % tuple(vals))
         self.step += 1
         ret = dict([('cost', float(cost)),
                     ('error', float(cost)),
                     ('lr', float(self.lr)),
                     ('time_step', float(g_ed - g_st)),
-                    ('whole_time', float(whole_time))]+zip(self.prop_names, rvals))
+                    ('whole_time', float(whole_time))]
+                   +[(name, value) for name, value in zip(self.prop_names, rvals)]
+                  )
         return ret

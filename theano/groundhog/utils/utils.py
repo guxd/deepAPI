@@ -25,7 +25,7 @@ def print_time(secs):
         return '%6.3f min' % (secs / 60.)
     else:
         return '%6.3f h  ' % (secs / 3600.)
-
+'''
 def print_mem(context=None):
     if theano.sandbox.cuda.cuda_enabled:
         rvals = theano.sandbox.cuda.cuda_ndarray.cuda_ndarray.mem_info()
@@ -40,7 +40,7 @@ def print_mem(context=None):
             info = str(context)
             print (('GPU status : Used %.3f Mb Free %.3f Mb,'
                     'total %.3f Mb [context %s]') %
-                    (total - available, available, total, info))
+                    (total - available, available, total, info))'''
 
 def const(value):
     return TT.constant(numpy.asarray(value, dtype=theano.config.floatX))
@@ -111,10 +111,12 @@ def sample_weights_classic(sizeX, sizeY, sparsity, scale, rng):
         sparsity = sizeY
     else:
         sparsity = numpy.minimum(sizeY, sparsity)
+        sparsity = int(sparsity)
     sparsity = numpy.minimum(sizeY, sparsity)
     values = numpy.zeros((sizeX, sizeY), dtype=theano.config.floatX)
-    for dx in xrange(sizeX):
+    for dx in range(sizeX):
         perm = rng.permutation(sizeY)
+        
         new_vals = rng.normal(loc=0, scale=scale, size=(sparsity,))
         values[dx, perm[:sparsity]] = new_vals
     return values.astype(theano.config.floatX)
@@ -129,8 +131,9 @@ def sample_weights_orth(sizeX, sizeY, sparsity, scale, rng):
         sparsity = sizeY
     else:
         sparsity = numpy.minimum(sizeY, sparsity)
+        sparsity = int(sparsity)
     values = numpy.zeros((sizeX, sizeY), dtype=theano.config.floatX)
-    for dx in xrange(sizeX):
+    for dx in range(sizeX):
         perm = rng.permutation(sizeY)
         new_vals = rng.normal(loc=0, scale=scale, size=(sparsity,))
         values[dx, perm[:sparsity]] = new_vals
@@ -141,10 +144,11 @@ def sample_weights_orth(sizeX, sizeY, sparsity, scale, rng):
     return values.astype(theano.config.floatX)
 
 def init_bias(size, scale, rng):
+    size=int(size)
     return numpy.ones((size,), dtype=theano.config.floatX)*scale
 
 def id_generator(size=5, chars=string.ascii_uppercase + string.digits):
-    return ''.join(random.choice(chars) for i in xrange(size))
+    return ''.join(random.choice(chars) for i in range(size))
 
 def constant_shape(shape):
     return lambda *args, **kwargs : shape

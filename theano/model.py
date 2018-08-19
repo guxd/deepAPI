@@ -10,20 +10,21 @@ from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from groundhog.layers import\
         Layer,\
         MultiLayer,\
-        SoftmaxLayer,\        
+        SoftmaxLayer,\
         RecurrentLayer,\
+        RecurrentLayerWithSearch,\
         UnaryOp,\
         Shift,\
         LastState,\
         DropOp,\
-        Concatenate
+        Concatenate,\
+        ReplicateLayer, PadLayer, ZeroLayer, Maxout
 from groundhog.models import LM_Model
-
 from groundhog.utils import sample_zeros, sample_weights_orth,constant_shape, init_bias, sample_weights_classic
 import groundhog.utils as utils
+from helper import prefix_lookup, none_if_zero
 
 logger = logging.getLogger(__name__)
-  
 
 
 class EncoderDecoderBase(object):
@@ -811,15 +812,6 @@ class RNNEncoderDecoder(object):
         self.y = TT.lmatrix('y')
         self.y_mask = TT.matrix('y_mask')
         self.inputs = [self.x, self.y, self.x_mask, self.y_mask]
-        
-        # The following part for early test during compiling. just debug and watch the tag.testvalues of each var
-#         theano.config.compute_test_value = 'raise'
-#         self.x.tag.test_value = numpy.random.randint(10, size=(3,4))
-#         self.x_mask.tag.test_value =numpy.asarray([[1,1,1,1],[1,1,0,1],[0,1,0,0]],dtype='float32')#= numpy.random.randint(2, size=(3,4))
-#         self.y.tag.test_value = numpy.random.randint(10,size=(3,4))
-#         self.y_mask.tag.test_value =numpy.asarray([[1,1,1,1],[1,1,0,1],[0,1,0,0]],dtype='float32')#= numpy.random.randint(2, size=(3,4))
-#       
-        
 
         # Graph1: for the log-likelihood computation (evaluating cost of <x,y> pairs during training)
         training_c_components = []
@@ -1023,3 +1015,4 @@ class RNNEncoderDecoder(object):
             else:
                 return probs
         return probs_computer
+    

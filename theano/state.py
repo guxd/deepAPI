@@ -99,7 +99,6 @@ def prototype_state():
     state['rec_reseter'] = 'lambda x: TT.nnet.sigmoid(x)'
 
     # ----- SIZES ----
-
     # Dimensionality of hidden layers
     state['dim'] = 1000
     # Dimensionality of low-rank approximation
@@ -219,11 +218,12 @@ def prototype_phrase_state():
 
     state = prototype_state()
 
-    state['datafolder']="./data/github/apiseq/"
+    state['datafolder']="./data/"
     state['source'] = [state['datafolder']+"train.desc.shuf.h5"]
     state['target'] = [state['datafolder']+"train.apiseq.shuf.h5"]
     state['word_indx'] = state['datafolder']+"vocab.desc.pkl"
     state['word_indx_trgt'] = state['datafolder']+"vocab.apiseq.pkl"
+    state['word_weight']=state['datafolder']+"wordidf.desc.pkl"
     state['word_weight_trgt'] = state['datafolder']+"wordidf.apiseq.pkl"
 
     state['null_sym_source'] = 10000
@@ -244,14 +244,14 @@ def prototype_search_state():
     'Neural Machine Translation by Jointly Learning to Align and Translate' """
     state = prototype_state()
     
-    state['datafolder']="./data/github/apiseq/"
-    state['source'] = [state['datafolder']+"train.apiseq.shuf.h5"]
-    state['target'] = [state['datafolder']+"train.desc.shuf.h5"]
+    state['datafolder']="./data/"
+    state['source'] = [state['datafolder']+"train.desc.shuf.h5"]
+    state['target'] = [state['datafolder']+"train.apiseq.shuf.h5"]
    
-    state['word_indx'] = state['datafolder']+"vocab.apiseq.pkl"
-    state['word_indx_trgt'] = state['datafolder']+"vocab.desc.pkl"
-    state['word_weight']=state['datafolder']+"wordidf.apiseq.pkl"
-    state['word_weight_trgt'] = state['datafolder']+"wordidf.desc.pkl"
+    state['word_indx'] = state['datafolder']+"vocab.desc.pkl"
+    state['word_indx_trgt'] = state['datafolder']+"vocab.apiseq.pkl"
+    state['word_weight']=state['datafolder']+"wordidf.desc.pkl"
+    state['word_weight_trgt'] = state['datafolder']+"wordidf.apiseq.pkl"
 
     state['null_sym_source'] = 10000
     state['null_sym_target'] = 10000
@@ -269,13 +269,11 @@ def prototype_search_state():
     state['last_forward'] = False
     state['forward'] = True
     state['backward'] = True
-    state['seqlen'] = 30
+    state['seqlen'] = 50
     state['sort_k_batches'] = 20
     state['prefix'] = 'search_desc2apiseq_test_'    
     
-    state['reload']=True;
+    state['reload']=False;
     
     return state
-
-
 

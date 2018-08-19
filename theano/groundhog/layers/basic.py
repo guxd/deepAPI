@@ -10,7 +10,7 @@ __contact__ = "Razvan Pascanu <r.pascanu@gmail>"
 
 import numpy
 import copy
-import cPickle as pkl
+import pickle as pkl
 import logging
 
 import theano

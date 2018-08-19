@@ -22,7 +22,7 @@ from groundhog import utils
 from groundhog.utils import sample_weights, sample_weights_classic,\
     init_bias, constant_shape, sample_zeros
 
-from basic import Layer
+from .basic import Layer
 
 logger = logging.getLogger(__name__)
 
@@ -454,66 +454,66 @@ class SigmoidLayer(CostLayer):
         #print
         if values.ndim > 1:
             for d in xrange(2):
-                print '%d-th sentence' % d
-                print 'Input: ',
+                print ('%d-th sentence' % d)
+                print ('Input: ',)
                 if character_level:
                     sen = []
                     for k in xrange(inps[0].shape[0]):
                         if model.word_indxs_src[inps[0][k][d]] == '<eol>':
                             break
                         sen.append(model.word_indxs_src[inps[0][k][d]])
-                    print "".join(sen),
+                    print ("".join(sen),)
                 else:
                     for k in xrange(inps[0].shape[0]):
-                        print model.word_indxs_src[inps[0][k][d]],
+                        print (model.word_indxs_src[inps[0][k][d]],)
                         if model.word_indxs_src[inps[0][k][d]] == '<eol>':
                             break
-                print ''
-                print 'Output: ',
+                print ('')
+                print ('Output: ',)
                 if character_level:
                     sen = []
                     for k in xrange(values.shape[0]):
                         if model.word_indxs[values[k][d]] == '<eol>':
                             break
                         sen.append(model.word_indxs[values[k][d]])
-                    print "".join(sen),
+                    print ("".join(sen),)
                 else:
                     for k in xrange(values.shape[0]):
-                        print model.word_indxs[values[k][d]],
+                        print (model.word_indxs[values[k][d]],)
                         if model.word_indxs[values[k][d]] == '<eol>':
                             break
-                print
-                print
+                print()
+                print()
         else:
-            print 'Input:  ',
+            print ('Input:  ',)
             if character_level:
                 sen = []
                 for k in xrange(inps[0].shape[0]):
                     if model.word_indxs_src[inps[0][k]] == '<eol>':
                         break
                     sen.append(model.word_indxs_src[inps[0][k]])
-                print "".join(sen),
+                print ("".join(sen),)
             else:
                 for k in xrange(inps[0].shape[0]):
-                    print model.word_indxs_src[inps[0][k]],
+                    print (model.word_indxs_src[inps[0][k]],)
                     if model.word_indxs_src[inps[0][k]] == '<eol>':
                         break
-            print ''
-            print 'Output: ',
+            print ('')
+            print ('Output: ',)
             if character_level:
                 sen = []
                 for k in xrange(values.shape[0]):
                     if model.word_indxs[values[k]] == '<eol>':
                         break
                     sen.append(model.word_indxs[values[k]])
-                print "".join(sen),
+                print ("".join(sen)),
             else:
                 for k in xrange(values.shape[0]):
-                    print model.word_indxs[values[k]],
+                    print (model.word_indxs[values[k]],)
                     if model.word_indxs[values[k]] == '<eol>':
                         break
-            print
-            print
+            print()
+            print()
 
     def fprop(self,
               state_below,
@@ -625,7 +625,7 @@ class SigmoidLayer(CostLayer):
         # Do we need the safety net of 1e-12  ?
         cost = -TT.log(TT.maximum(1e-12, class_probs)) * target -\
             TT.log(TT.maximum(1e-12, 1 - class_probs)) * (1 - target)
-        print 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+        print ('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
         if cost.ndim > 1:
             cost = cost.sum(1)
         if mask:
@@ -675,67 +675,67 @@ class SoftmaxLayer(CostLayer):
         #print 'Generated sample is:'
         #print
         if values.ndim > 1:
-            for d in xrange(2):
-                print '%d-th sentence' % d
-                print 'Input: ',
+            for d in range(2):
+                print ('%d-th sentence' % d)
+                print ('Input: ',end="")
                 if character_level:
                     sen = []
-                    for k in xrange(inps[0].shape[0]):
+                    for k in range(inps[0].shape[0]):
                         if model.word_indxs_src[inps[0][k][d]] == '<eol>':
                             break
                         sen.append(model.word_indxs_src[inps[0][k][d]])
-                    print "".join(sen),
+                    print ("".join(sen),end="")
                 else:
-                    for k in xrange(inps[0].shape[0]):
-                        print model.word_indxs_src[inps[0][k][d]],
+                    for k in range(inps[0].shape[0]):
+                        print (model.word_indxs_src[inps[0][k][d]],end="")
                         if model.word_indxs_src[inps[0][k][d]] == '<eol>':
                             break
-                print ''
-                print 'Output: ',
+                print ('')
+                print ('Output: ', end="")
                 if character_level:
                     sen = []
-                    for k in xrange(values.shape[0]):
+                    for k in range(values.shape[0]):
                         if model.word_indxs[values[k][d]] == '<eol>':
                             break
                         sen.append(model.word_indxs[values[k][d]])
-                    print "".join(sen),
+                    print ("".join(sen),end="")
                 else:
-                    for k in xrange(values.shape[0]):
-                        print model.word_indxs[values[k][d]],
+                    for k in range(values.shape[0]):
+                        print (model.word_indxs[values[k][d]],end="")
                         if model.word_indxs[values[k][d]] == '<eol>':
                             break
-                print
-                print
+                print()
+                print()
         else:
-            print 'Input:  ',
+            print ('Input:  ',end="")
             if character_level:
                 sen = []
-                for k in xrange(inps[0].shape[0]):
+                for k in range(inps[0].shape[0]):
                     if model.word_indxs_src[inps[0][k]] == '<eol>':
                         break
                     sen.append(model.word_indxs_src[inps[0][k]])
-                print "".join(sen),
+                print ("".join(sen),end=" ")
             else:
-                for k in xrange(inps[0].shape[0]):
-                    print model.word_indxs_src[inps[0][k]],
+                for k in range(inps[0].shape[0]):
+                    print (model.word_indxs_src[inps[0][k]],end=" ")
                     if model.word_indxs_src[inps[0][k]] == '<eol>':
                         break
-            print ''
-            print 'Output: ',
+            print ('')
+            print ('Output: ',end="")
             if character_level:
                 sen = []
-                for k in xrange(values.shape[0]):
+                for k in range(values.shape[0]):
                     if model.word_indxs[values[k]] == '<eol>':
                         break
                     sen.append(model.word_indxs[values[k]])
-                print "".join(sen),
+                print ("".join(sen),end="")
             else:
-                for k in xrange(values.shape[0]):
-                    print model.word_indxs[values[k]],
+                for k in range(values.shape[0]):
+                    print (model.word_indxs[values[k]],end=" ")
                     if model.word_indxs[values[k]] == '<eol>':
                         break
-            print
-            print
+            print()
+            print()
 
     def fprop(self,
               state_below,
@@ -937,9 +937,9 @@ class SoftmaxLayer(CostLayer):
             cost = cost * TT.cast(mask.flatten(), theano.config.floatX)
         cost=cost.reshape(target_shape)   # A cost matrix recording costs for individual elements in the target matrix
         
-
-      
-       
+         
+            
+            
             
             
             
@@ -965,15 +965,11 @@ class SoftmaxLayer(CostLayer):
             self.cost = self.cost*scale
         if reg:
             self.cost = self.cost + reg
-            
-        
-           
-           
-        
-        
+
             
         self.mask = mask
         self.cost_scale = scale
         
         return self.cost
+
 
