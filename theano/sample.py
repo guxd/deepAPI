@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 
 import numpy
 
-from model import RNNEncoderDecoder, prototype_state
+from model import RNNEncoderDecoder
+from state import prototype_state
 from helper import parse_input
 
 from numpy import argpartition
@@ -40,7 +41,7 @@ class BeamSearch(object):
 #         self.wordidf_dict_src = pickle.load(open(state['word_weight'],'rb'))
 #         #plt.hist(self.wordidf_dict_src.values())
 #         #plt.show()
-        self.wordidf_dict_tar = pickle.load(open(state['word_weight_trgt'],'rb'))
+        self.wordidf_dict_tar = pickle.load(open(state['word_weight_trgt'],'rb'), encoding='latin1')
 #         max_wordidx=max(self.wordidf_dict_src.keys())
 #         self.wordidf_array_src=numpy.zeros(max_wordidx+2)
 #         for idx in self.wordidf_dict_src.keys():
@@ -56,7 +57,7 @@ class BeamSearch(object):
 
     def search(self, seq, n_samples, ignore_unk=False, minlen=1):
         c = self.comp_repr(seq)[0] #compute the context vector c of a sequence
-        states = map(lambda x : x[None, :], self.comp_init_states(c))
+        states = list(map(lambda x : x[None, :], self.comp_init_states(c)))
         dim = states[0].shape[1]
         
 #         meanidf_src=self.wordidf_array_src[seq[0:len(seq)-1]].mean()
@@ -76,7 +77,7 @@ class BeamSearch(object):
                 break
             # Compute probabilities of the next words for all the elements of the beam.
             beam_size = len(trans)# real beam size, beam size is reduced when a satisfied result is found, so it is updated at each step
-            last_words = (numpy.array(map(lambda t : t[-1], trans))#get the last word for each temp translation sequence
+            last_words = (numpy.array(list(map(lambda t : t[-1], trans)))#get the last word for each temp translation sequence
                     if k > 0
                     else numpy.zeros(beam_size, dtype="int64"))
             log_probs = numpy.log(self.comp_next_probs(c, k, last_words, *states)[0])
@@ -102,7 +103,7 @@ class BeamSearch(object):
                 #indices of the temp mig sequences with the best costs
             # Decypher flatten indices
             voc_size = log_probs.shape[1]
-            trans_indices = best_costs_indices / voc_size
+            trans_indices = best_costs_indices // voc_size
             word_indices = best_costs_indices % voc_size
             costs = flat_next_costs[best_costs_indices]
 
@@ -134,7 +135,7 @@ class BeamSearch(object):
                     n_samples -= 1
                     final_trans.append(new_trans[i])
                     final_costs.append(new_costs[i])
-            states = map(lambda x : x[indices], new_states)#update states
+            states = list(map(lambda x : x[indices], new_states))#update states
 
         # Dirty tricks to obtain any translation
         if not len(final_trans):
@@ -175,7 +176,7 @@ def sample(lm_model, seq, n_samples,
             sentences.append(" ".join(sen))
         for i in range(len(costs)):
             if verbose:
-                print "{}: {}".format(costs[i], sentences[i])
+                print ("{}: {}".format(costs[i], sentences[i]))
         return c, sentences, costs, trans
     elif sampler:
         sentences = []
@@ -200,7 +201,7 @@ def sample(lm_model, seq, n_samples,
         sprobs = numpy.argsort(costs)
         if verbose:
             for pidx in sprobs:
-                print "{}: {} {} {}".format(pidx, -costs[pidx], all_probs[pidx], sentences[pidx])
+                print ("{}: {} {} {}".format(pidx, -costs[pidx], all_probs[pidx], sentences[pidx]))
             print
         return c, sentences, costs, None
     else:
@@ -208,14 +209,14 @@ def sample(lm_model, seq, n_samples,
 
 
 def parse_args():
-    '''--state ./data/github/apiseq/models/search_desc2apiseq_state.pkl 
-    --model_path ./data/github/apiseq/models/search_desc2apiseq_model.npz 
-    --source ./data/github/apiseq/test.desc.shuf.txt 
-    --trans ./data/github/apiseq/result.apiseq.shuf.txt 
-    --validate ./data/github/apiseq/test.apiseq.shuf.txt'''
-    defaultfolder='./data/github/apiseq/'
-    defaultstate=defaultfolder+'model/search_desc2apiseq_state.pkl'
-    defaultmodel=defaultfolder+'model/search_desc2apiseq_model.npz'
+    '''--state ./data/search_desc2apiseq_state.pkl 
+    --model_path ./data/search_desc2apiseq_model.npz 
+    --source ./data/test.desc.shuf.txt 
+    --trans ./data//result.apiseq.shuf.txt 
+    --validate ./data/test.apiseq.shuf.txt'''
+    defaultfolder='./data/'
+    defaultstate=defaultfolder+'search_desc2apiseq_state.pkl'
+    defaultmodel=defaultfolder+'search_desc2apiseq_model.npz'
     defaultsource=defaultfolder+'test.desc.shuf.txt'
     defaultresult=defaultfolder+'result.apiseq.shuf.txt'
     defaultvalid=defaultfolder+'test.apiseq.shuf.txt'
@@ -223,7 +224,7 @@ def parse_args():
     
     parser = argparse.ArgumentParser(
             "Sample (of find with beam-serch) translations from a translation model")
-    parser.add_argument("--state", required=True, help="State to use",
+    parser.add_argument("--state", required=False, help="State to use",
                         default=defaultstate)
     parser.add_argument("--beam-search",
             action="store_true", default=True, help="Beam size, turns on beam-search")
@@ -247,11 +248,11 @@ def parse_args():
 def main():
     args = parse_args()
     # Sample args: 
-    # --state .\data\github\phrase_state.pkl  
+    # --state .\data\phrase_state.pkl  
     # --beam-search --model_path .\data\github\phrase_model.npz
 
     state = prototype_state()
-    with open(args.state) as src:
+    with open(args.state, 'rb') as src:
         state.update(pickle.load(src))
     state.update(eval("dict({})".format(args.changes)))
 
@@ -263,7 +264,6 @@ def main():
     lm_model = enc_dec.create_lm_model()
     lm_model.load(args.model_path)
     indx_word = pickle.load(open(state['word_indx'],'rb'))
-
     sampler = None
     beam_search = None
     if args.beam_search:
@@ -298,7 +298,7 @@ def main():
             context_vec, trans, costs, _ = sample(lm_model, seq, n_samples, sampler=sampler,
                     beam_search=beam_search, ignore_unk=args.ignore_unk, normalize=args.normalize)
             if not trans:#if no translation
-                for ss in xrange(top_num):
+                for ss in range(top_num):
                     print >>ftrans, "a"
             else:                
                 top = numpy.array(costs).argsort()[0:top_num]  
@@ -306,10 +306,10 @@ def main():
                 for k in top:
                     print >>ftrans, trans[k]
                 if len(top)<top_num:
-                    for ss in xrange(top_num-len(top)):
+                    for ss in range(top_num-len(top)):
                         print >>ftrans, "a"
             if args.verbose and trans:
-                print "Translation:", trans[top[0]]
+                print ("Translation:{}".format(trans[top[0]]))
                 #print ("Context Vector:%d",context_vec)
                 
             if args.vec:#print context vectors
@@ -329,7 +329,7 @@ def main():
                     fvec.flush()
                 logger.debug("Current speed is {} per sentence".
                         format((time.time() - start_time) / (i + 1)))
-        print "Total cost of the translations: {}".format(total_cost)  
+        print ("Total cost of the translations: {}".format(total_cost))
         fsrc.close()
         ftrans.close()
         if args.vec:
@@ -342,7 +342,7 @@ def main():
             avg_bleu=bleu_analyze(ftrans.readlines(),fvalid.readlines(),top_num)
             ftrans.close()
             fvalid.close()
-            print "Avg bleu of the translations: {}".format(avg_bleu)        
+            print ("Avg bleu of the translations: {}".format(avg_bleu))      
         
         
     else:
@@ -354,9 +354,9 @@ def main():
                 if not args.beam_search:
                     alpha = float(raw_input('Inverse Temperature? '))
                 seq,parsed_in = parse_input(state, indx_word, seqin, idx2word=idict_src)
-                print "Parsed Input:", parsed_in
+                print ("Parsed Input: {}".format(parsed_in))
             except Exception:
-                print "Exception while parsing your input:"
+                print ("Exception while parsing your input:")
                 traceback.print_exc()
                 continue
 

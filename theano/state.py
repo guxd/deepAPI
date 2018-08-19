@@ -271,7 +271,7 @@ def prototype_search_state():
     state['backward'] = True
     state['seqlen'] = 50
     state['sort_k_batches'] = 20
-    state['prefix'] = 'search_desc2apiseq_test_'    
+    state['prefix'] = 'search_desc2apiseq_'    
     
     state['reload']=False;
     

@@ -12,7 +12,7 @@ def load_timings(path, y="cost2_p_expl", start=0, finish=3000000, window=100, ho
     num_steps = min(tm['step'], finish)
     df = pandas.DataFrame({k : tm[k] for k in [y, 'time_step']})[start:num_steps]
     one_step = df['time_step'][-window:].median() / 3600.0
-    print "Median time for one step is {} hours".format(one_step)
+    print ("Median time for one step is {} hours".format(one_step))
     if hours:
         df.index = (start + numpy.arange(0, df.index.shape[0])) * one_step
     return pandas.rolling_mean(df, window).iloc[window:]
@@ -20,9 +20,9 @@ def load_timings(path, y="cost2_p_expl", start=0, finish=3000000, window=100, ho
 def show_timings(axes, timings, legend, y="cost2_p_expl", hours=False):
     for data, name in zip(timings, legend):
         axes.plot(data.index, data[y])
-        print "Average {} is {} after {} {} for {}".format(
+        print ("Average {} is {} after {} {} for {}".format(
                 y, data[y].iloc[-1],
-                data.index[-1], "hours" if hours else "iterations", name)
+                data.index[-1], "hours" if hours else "iterations", name))
     #axes.set_ylim(0, 20)
     axes.set_xlabel("hours" if hours else "iterations")
     axes.set_ylabel("log_2 likelihood")
@@ -88,7 +88,7 @@ def main():
     args = parse_args()
     results = open(args.result_file).readlines()
     refs=open(args.ref_file).readlines()
-    print bleu_analyze(results,refs,args.top_num)            
+    print (bleu_analyze(results,refs,args.top_num))          
         
 
 if __name__ == "__main__":

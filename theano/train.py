@@ -66,8 +66,8 @@ def main():
         if args.state.endswith(".py"):
             state.update(eval(open(args.state).read()))
         else:
-            with open(args.state) as src:
-                state.update(cPickle.load(src))
+            with open(args.state, 'rb') as src:
+                state.update(pickle.load(src))
     for change in args.changes:
         state.update(eval("dict({})".format(change)))
 

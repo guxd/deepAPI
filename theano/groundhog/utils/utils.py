@@ -84,7 +84,7 @@ def softmax(x):
         return e/ TT.sum(e)
 
 def sample_zeros(sizeX, sizeY, sparsity, scale, rng):
-    return numpy.zeros((sizeX, sizeY), dtype=theano.config.floatX)
+    return numpy.zeros((int(sizeX), int(sizeY)), dtype=theano.config.floatX)
 
 def sample_weights(sizeX, sizeY, sparsity, scale, rng):
     """
