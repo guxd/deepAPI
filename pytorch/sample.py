@@ -4,18 +4,18 @@ import random
 
 import torch
 import torch.nn as nn
-import json
-
 import os, sys
 parentPath = os.path.abspath("..")
 sys.path.insert(0, parentPath)# add parent folder to path so as to import common modules
 from helper import indexes2sent, gVar, gData
-import models, experiments, data, configs
-from experiments import Metrics
+import model, data, configs
+from metrics import Metrics
 from data import APIDataset, load_dict, load_vecs
 
 
-def evaluate(model, metrics, test_loader, vocab, ivocab, f_eval, repeat):
+def evaluate(model, metrics, test_loader, vocab_desc, vocab_api, f_eval, repeat):
+    ivocab_api = {v: k for k, v in vocab_api.items()}
+    ivocab_desc = {v: k for k, v in vocab_desc.items()}
     
     recall_bleus, prec_bleus = [], []
     local_t = 0
@@ -25,14 +25,14 @@ def evaluate(model, metrics, test_loader, vocab, ivocab, f_eval, repeat):
             break
         
         
-        desc_str = indexes2sent(descs[0].numpy(), vocab)
+        desc_str = indexes2sent(descs[0].numpy(), vocab_desc)
         
         descs, desc_lens = gVar(descs), gVar(desc_lens)
         sample_words, sample_lens = model.sample(descs, desc_lens, repeat)
         # nparray: [repeat x seq_len]
-        pred_sents, _ = indexes2sent(sample_words, vocab)
+        pred_sents, _ = indexes2sent(sample_words, vocab_api)
         pred_tokens = [sent.split(' ') for sent in pred_sents]
-        ref_str, _ =indexes2sent(apiseqs[0].numpy(), vocab, vocab["<SOS>"])
+        ref_str, _ =indexes2sent(apiseqs[0].numpy(), vocab_api, vocab["<s>"])
         ref_tokens = ref_str.split(' ')
         
         max_bleu, avg_bleu = metrics.sim_bleu(pred_tokens, ref_tokens)
@@ -72,14 +72,14 @@ def main(args):
     # Load data
     test_set=APIDataset(args.data_path+'valid.h5', conf['maxlen'])
     test_loader=torch.utils.data.DataLoader(dataset=test_set, batch_size=1, shuffle=False, num_workers=1)
-    vocab = load_dict(args.data_path+'vocab.json')
-    ivocab = {v: k for k, v in vocab.items()}
-    n_tokens = len(ivocab)
+    vocab_api = load_dict(input_dir+'vocab.apiseq.pkl')
+    vocab_desc = load_dict(input_dir+'vocab.desc.pkl')
+    n_tokens = len(vocab_api)
 
     metrics=Metrics()
     
     # Load model checkpoints    
-    model = getattr(models, args.model)(conf, n_tokens)
+    model = getattr(model, args.model)(conf, n_tokens)
     ckpt='./output/{}/{}/models/model_epo{}.pkl'.format(args.model, args.expname, args.reload_from)
     model.load_state_dict(torch.load(ckpt))
     if torch.cuda.is_available():
@@ -89,7 +89,7 @@ def main(args):
     f_eval = open("./output/{}/{}/results.txt".format(args.model, args.expname), "w")
     repeat = args.n_samples
     
-    evaluate(model, metrics, test_loader, vocab, ivocab, f_eval, repeat)
+    evaluate(model, metrics, test_loader, vocab_desc, vocab_api, f_eval, repeat)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch DeepAPI for Eval')

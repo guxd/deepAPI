@@ -10,9 +10,9 @@ import os, sys
 parentPath = os.path.abspath("..")
 sys.path.insert(0, parentPath)# add parent folder to path so as to import common modules
 from helper import timeSince, sent2indexes, indexes2sent, gData, gVar
-import models, experiments, configs, data
-from data import APIDataset, load_dict, load_vecs
-from experiments import Metrics
+import model, configs, data
+from data import APIDataset, APIDataset, load_dict, load_vecs
+from metrics import Metrics
 from sample import evaluate
 
 from tensorboardX import SummaryWriter # install tensorboardX (pip install tensorboardX) before importing this package
@@ -84,12 +84,12 @@ config = getattr(configs, 'config_'+args.model)()
 ###############################################################################
 # Load data
 ###############################################################################
-train_set=APIDataset(args.data_path+'train.h5', config['maxlen'])
-valid_set=APIDataset(args.data_path+'valid.h5', config['maxlen'])
+train_set=APIDataset(args.data_path+'train.desc.shuf.h5', args.data_path+'train.apiseq.shuf.h5', config['maxlen'])
+valid_set=APIDataset(args.data_path+'test.desc.shuf.h5', args.data_path+'test.apiseq.shuf.h5', config['maxlen'])
 
-vocab = load_dict(args.data_path+'vocab.json')
-ivocab = {v: k for k, v in vocab.items()}
-n_tokens = len(ivocab)
+vocab_api = load_dict(args.data_path+'vocab.apiseq.pkl')
+vocab_desc = load_dict(args.data_path+'vocab.desc.pkl')
+n_tokens = len(vocab_api)
 
 metrics=Metrics()
 
@@ -99,7 +99,7 @@ print("Loaded data!")
 # Define the models
 ###############################################################################
 
-model = getattr(models, args.model)(config, n_tokens) 
+model = getattr(model, args.model)(config, n_tokens) 
 if args.reload_from>=0:
     load_model(model, args.reload_from)
     
@@ -196,8 +196,7 @@ for epoch in range(start_epoch, config['epochs']+1):
             f_eval = open("./output/{}/{}/tmp_results/iter{}.txt".format(args.model, args.expname, itr_global), "w")
             repeat = 10
         
-            recall_bleu, prec_bleu
-                 =evaluate(model, metrics, valid_loader, vocab, ivocab, f_eval, repeat)
+            recall_bleu, prec_bleu = evaluate(model, metrics, valid_loader, vocab_desc, vocab_api, f_eval, repeat)
                          
             if args.visual:
                 tb_writer.add_scalar('recall_bleu', recall_bleu, itr_global)

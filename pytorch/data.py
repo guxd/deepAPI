@@ -3,7 +3,7 @@ import torch
 import torch.utils.data as data
 import torch.nn as nn
 import tables
-import json
+import pickle
 import random
 import numpy as np
 from helper import PAD_ID, SOS_ID, EOS_ID, UNK_ID
@@ -13,9 +13,9 @@ use_cuda = torch.cuda.is_available()
     
 class APIDataset(data.Dataset):
     """
-    Dataset that has only positive samples.
+    Dataset that has binary samples.
     """
-    def __init__(self, api_file, desc_file, max_seq_len=50):
+    def __init__(self, desc_file, api_file, max_seq_len=50):
         # 1. Initialize file path or list of file names.
         """read training sentences(list of int array) from a hdf5 file"""
         self.max_seq_len=max_seq_len
@@ -65,7 +65,7 @@ class APIDataset(data.Dataset):
     
     
 def load_dict(filename):
-    return json.loads(open(filename, "r").readline())
+    return pickle.load(open(filename,'rb'))
 
 def load_vecs(fin):         
     """read vectors (2D numpy array) from a hdf5 file"""
@@ -89,14 +89,17 @@ def save_vecs(vecs, fout):
 if __name__ == '__main__':
     
     input_dir='./data/'
-    VALID_FILE=input_dir+'train.h5'
-    valid_set=APIDataset(VALID_FILE)
+    VALID_FILE_API=input_dir+'test.apiseq.shuf.h5'
+    VALID_FILE_DESC=input_dir+'test.desc.shuf.h5'
+    valid_set=APIDataset(VALID_FILE_DESC, VALID_FILE_API)
     valid_data_loader=torch.utils.data.DataLoader(dataset=valid_set,
                                                   batch_size=1,
                                                   shuffle=False,
                                                   num_workers=1)
-    vocab = load_dict(input_dir+'vocab.json')
-    ivocab = {v: k for k, v in vocab.items()}
+    vocab_api = load_dict(input_dir+'vocab.apiseq.pkl')
+    ivocab_api = {v: k for k, v in vocab_api.items()}
+    vocab_desc = load_dict(input_dir+'vocab.desc.pkl')
+    ivocab_desc = {v: k for k, v in vocab_desc.items()}
     #print ivocab
     k=0
     for qapair in valid_data_loader:
@@ -107,12 +110,12 @@ if __name__ == '__main__':
         idx=qapair[0].numpy().tolist()[0]
         print (idx)
         for i in idx:
-            decoded_words.append(ivocab[i])
+            decoded_words.append(ivocab_desc[i])
         question = ' '.join(decoded_words)
         decoded_words=[]
         idx=qapair[1].numpy().tolist()[0]
         for i in idx:
-            decoded_words.append(ivocab[i])
+            decoded_words.append(ivocab_api[i])
         answer=' '.join(decoded_words)
         print('<', question)
         print('>', answer)

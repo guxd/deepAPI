@@ -157,12 +157,12 @@ class Decoder(nn.Module):
         self.dropout = dropout
 
         self.embedding = embedder
-        self.rnn = nn.GRU(input_size, hidden_size, dropout=0.2, batch_first=True)
+        self.rnn = nn.GRU(input_size, hidden_size, batch_first=True)
         self.out = nn.Linear(hidden_size, vocab_size)
         
         self.use_attention = use_attention
         if use_attention:
-            self.rnn = nn.GRU(input_size + hidden_size, hidden_size, dropout=0.2, batch_first=True)
+            self.rnn = nn.GRU(input_size + hidden_size, hidden_size, batch_first=True)
             self.attn = AttentionPooling(self.hidden_size, [self.hidden_size], self.hidden_size)
             self.out = nn.Linear(2*self.hidden_size, vocab_size) 
             
