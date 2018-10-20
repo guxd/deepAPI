@@ -132,25 +132,7 @@ for epoch in range(start_epoch, config['epochs']+1):
             break 
         descs, apiseqs, desc_lens, api_lens = gVar(descs), gVar(apiseqs), gVar(desc_lens), gVar(api_lens)
         loss_AE = model.train_AE(descs, desc_lens, apiseqs, api_lens)
-        loss_records.extend(loss_AE)
-        #if itr % 100 ==0:
-#       model.encoder.noise_radius = model.encoder.noise_radius*config['noise_anneal'] # exponentially decaying noise on autoencoder
-
-        loss_G = model.train_G(descs, desc_lens, apiseqs, api_lens)
-        loss_records.extend(loss_G)
-        
-        for i in range(config['n_iters_d']):# train discriminator/critic
-            loss_D = model.train_D(descs, desc_lens, apiseqs, api_lens)  
-            if i==0:
-                loss_records.extend(loss_D)
-            if i==config['n_iters_d']-1:
-                break
-            try:
-                descs, apiseqs, desc_lens, api_lens = train_data_iter.next() 
-            except StopIteration: # end of epoch
-                break 
-            descs, apiseqs, desc_lens, api_lens = gVar(descs), gVar(apiseqs), gVar(desc_lens), gVar(api_lens)                      
-                
+        loss_records.extend(loss_AE)                   
                                
         if itr % args.log_every == 0:
             elapsed = time.time() - itr_start_time

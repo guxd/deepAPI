@@ -12,7 +12,7 @@ import random
 import sys
 parentPath = os.path.abspath("..")
 sys.path.insert(0, parentPath)# add parent folder to path so as to import common modules
-from helper import gVar, gData, SOS_ID, EOS_ID
+from helper import gVar, gData, sequence_mask, SOS_ID, EOS_ID
             
 class MLP(nn.Module):
     def __init__(self, input_size, arch, output_size, activation=nn.ReLU(), batch_norm=True, init_weight=0.02):
@@ -95,6 +95,7 @@ class Encoder(nn.Module):
             _, inv_indices = indices.sort()
             hids, lens = pad_packed_sequence(hids, batch_first=True)     
             hids = hids.index_select(0, inv_indices)
+            hids = (hids, sequence_mask(input_lens)) # append mask for attention
             h_n = h_n.index_select(1, inv_indices)
         h_n = h_n.view(self.n_layers, (1+self.bidirectional), batch_size, self.hidden_size) #[n_layers x n_dirs x batch_sz x hid_sz]
         h_n = h_n[-1] # get the last layer [n_dirs x batch_sz x hid_sz]
@@ -176,7 +177,7 @@ class Decoder(nn.Module):
         self.out.weight.data.uniform_(-initrange, initrange)# Initialize Linear Weight
         self.out.bias.data.fill_(0)
     
-    def forward(self, init_h, encoder_hids, context=None, inputs=None, lens=None):
+    def forward(self, init_h, enc_hids, context=None, inputs=None, lens=None):
         batch_size, maxlen = inputs.size()
         if self.embedding is not None:
             inputs = self.embedding(inputs) # input: [batch_sz x seqlen x emb_sz]
@@ -184,15 +185,15 @@ class Decoder(nn.Module):
         inputs = F.dropout(inputs, self.dropout, self.training) 
         
         h = init_h.unsqueeze(0) # last_hidden of decoder [n_dir x batch_sz x hid_sz]
-        
+        enc_hids, enc_hids_mask = enc_hids
         if self.use_attention:            
             attn_ctx = gVar(torch.zeros(batch_size,1, self.hidden_size))
             for di in range(inputs.size(1)):
                 x = inputs[:,di,:].unsqueeze(1) # [batch_sz x 1 x emb_sz]
                 x = torch.cat((x, attn_ctx),2) # [batch_sz x 1 x (emb_sz+hid_sz)]
                 h_n, h = self.rnn(x, h) # h_n: [batch_sz x 1 x hid_sz] h: [1 x batch_sz x hid_sz]
-                queries=[h[0].unsqueeze(1)] # [[batch_sz x 1 x hid_sz]]
-                attn_weights, attn_ctx = self.attn(encoder_hids, queries) 
+                queries=[h.transpose(0,1)] # [[batch_sz x 1 x hid_sz]]
+                attn_weights, attn_ctx = self.attn(enc_hids, queries, enc_hids_mask) 
                                   # attn_ctx: [batch_sz x 1 x hid_sz] weights: [batch_sz x seq_len x 1]
                 out=self.out(torch.cat((h_n, attn_ctx),2)) # out: [batch_sz x 1 x vocab_sz]
                 decoded = out if di==0 else torch.cat([decoded, out],1) # decoded: [batch_sz x maxlen x vocab_sz]
@@ -206,7 +207,7 @@ class Decoder(nn.Module):
             decoded = decoded.view(batch_size, maxlen, self.vocab_size)
         return decoded
     
-    def sampling(self, init_h, encoder_hids, context,  maxlen, mode='greedy'):
+    def sampling(self, init_h, enc_hids, context,  maxlen, mode='greedy'):
         """
         A simple greedy sampling
         :param init_h: [batch_sz x hid_sz]
@@ -219,15 +220,16 @@ class Decoder(nn.Module):
         x = gVar(torch.LongTensor([[SOS_ID]*batch_size]).view(batch_size,1))# [batch_sz x 1] (1=seq_len)
         x = self.embedding(x) if self.embedding is not None else x #[batch_sz x seqlen x emb_sz]
         
-        h = init_h.unsqueeze(0) # [1 x batch_sz x hid_sz]      
+        h = init_h.unsqueeze(0) # [1 x batch_sz x hid_sz]   
+        enc_hids, enc_hids_mask = enc_hids
         attn_ctx = gVar(torch.zeros(batch_size,1, self.hidden_size))
         
         for di in range(maxlen):
             if self.use_attention:
                 x = torch.cat((x, attn_ctx),2) # [batch_sz x 1 x hid_sz]
                 h_n, h = self.rnn(x, h) # h_n: [batch_sz x 1 x hid_sz] h: [1 x batch_sz x hid_sz]
-                queries=[h[0].unsqueeze(1)] # [[batch_sz x 1 x hid_sz]]
-                attn_weights, attn_ctx = self.attn(encoder_hids, queries) 
+                queries=[h.transpose(0,1)] # [[batch_sz x 1 x hid_sz]]
+                attn_weights, attn_ctx = self.attn(enc_hids, queries, enc_hids_mask) 
                                   # attn_ctx: [batch_sz x 1 x hid_sz] weights: [batch_sz x seq_len x 1]
                 out=self.out(torch.cat((h_n, attn_ctx),2)) # out: [batch_sz x 1 x vocab_sz]
                 
@@ -250,7 +252,7 @@ class Decoder(nn.Module):
                 sample_lens[i]=sample_lens[i]+1
         return decoded_words, sample_lens  
     
-    def beam_search(self, init_h, encoder_hids, context, beam_size, max_unroll):
+    def beam_search(self, init_h, enc_hids, context, beam_size, max_unroll):
         """
         Args:
             init_h (variable, FloatTensor): [batch_size x hid_size]
@@ -261,8 +263,9 @@ class Decoder(nn.Module):
         batch_size = init_h.size(0)
         x = gVar(torch.LongTensor([SOS_ID] *batch_size*beam_size))# [batch_size*beam_size]
         if self.use_attention:             
-            encoder_hids = encoder_hids.repeat(beam_size, 1, 1) # repeat encoder hiddens by beam_size times
-            # ?? tile or repeat?  
+            enc_hids, enc_hids_mask = enc_hids
+            enc_hids = enc_hids.repeat(beam_size, 1, 1) # repeat encoder hiddens by beam_size times
+            enc_hids_mask = enc_hids_mask.repeat(beam_size, 1) 
         h = init_h.unsqueeze(0).repeat(1,beam_size,1).contiguous() # [n_layers=1 x (batch_size*beam_size) x hid_size]
             # ?? tile or repeat?
             
@@ -287,7 +290,7 @@ class Decoder(nn.Module):
                 x = torch.cat((x, attn_ctx),2) # [batch_sz x 1 x hid_sz]
                 h_n, h = self.rnn(x, h)# h: [n_layers=1 x (batch_size*beam_size) x hidden_size]
                 queries=[h[0].unsqueeze(1)] # [[(batch_sz*beam_sz) x 1 x hid_sz]]
-                attn_weights, attn_ctx = self.attn(encoder_hids, queries) 
+                attn_weights, attn_ctx = self.attn(enc_hids, queries, enc_hids_mask) 
                                   # attn_ctx: [batch_sz x 1 x hid_sz] weights: [batch_sz x seq_len x 1]
                 out=self.out(torch.cat((h_n, attn_ctx),2)).squeeze(1) # out: [(batch_sz*beam_sz) x vocab_sz]
             else:
