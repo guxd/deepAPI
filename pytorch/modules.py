@@ -9,6 +9,8 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import os
 import numpy as np
 import random
+from queue import PriorityQueue
+import operator
 import sys
 parentPath = os.path.abspath("..")
 sys.path.insert(0, parentPath)# add parent folder to path so as to import common modules
@@ -147,7 +149,8 @@ class AttentionPooling(nn.Module):
         scores = self._calculate_scores(key, key_mask, score_unnormalized)
         context = torch.bmm(scores.transpose(1, 2), values)
         return scores, context
-    
+
+
 class Decoder(nn.Module):
     def __init__(self, embedder, input_size, hidden_size, vocab_size, use_attention=False, n_layers=1, dropout=0.5):
         super(Decoder, self).__init__()
@@ -155,8 +158,8 @@ class Decoder(nn.Module):
         self.input_size= input_size # size of the input to the RNN (e.g., embedding dim)
         self.hidden_size = hidden_size # RNN hidden size
         self.vocab_size = vocab_size # RNN output size (vocab size)
-        self.dropout = dropout
-
+        self.dropout= dropout
+        
         self.embedding = embedder
         self.rnn = nn.GRU(input_size, hidden_size, batch_first=True)
         self.out = nn.Linear(hidden_size, vocab_size)
@@ -170,274 +173,183 @@ class Decoder(nn.Module):
         self.init_weights()
         
     def init_weights(self):
-        initrange = 0.1
         for w in self.rnn.parameters(): # initialize the gate weights with orthogonal
             if w.dim()>1:
                 weight_init.orthogonal_(w)
-        self.out.weight.data.uniform_(-initrange, initrange)# Initialize Linear Weight
-        self.out.bias.data.fill_(0)
+        self.out.weight.data.uniform_(-0.1, 0.1)#nn.init.xavier_normal_(self.out.weight)        
+        nn.init.constant_(self.out.bias, 0.)
     
     def forward(self, init_h, enc_hids, context=None, inputs=None, lens=None):
-        batch_size, maxlen = inputs.size()
+        '''
+        init_h: initial hidden state for decoder
+        enc_hids: a tuple of (enc_hids, mask) for attention use
+        context: context information to be paired with input
+        inputs: inputs to the decoder
+        lens: input lengths
+        '''
         if self.embedding is not None:
             inputs = self.embedding(inputs) # input: [batch_sz x seqlen x emb_sz]
-        
-        inputs = F.dropout(inputs, self.dropout, self.training) 
-        
-        h = init_h.unsqueeze(0) # last_hidden of decoder [n_dir x batch_sz x hid_sz]
-        enc_hids, enc_hids_mask = enc_hids
-        if self.use_attention:            
-            attn_ctx = gVar(torch.zeros(batch_size,1, self.hidden_size))
-            for di in range(inputs.size(1)):
+        batch_size, maxlen, _ = inputs.size()
+        inputs = F.dropout(inputs, self.dropout, self.training)  
+        h = init_h.unsqueeze(0) # last_hidden of decoder [n_dir x batch_sz x hid_sz]        
+        if self.use_attention:  
+            enc_hids, enc_hids_mask = enc_hids
+            _, attn_ctx = self.attn(enc_hids, [h.transpose(0,1)], enc_hids_mask)# initial attention context
+            for di in range(maxlen):
                 x = inputs[:,di,:].unsqueeze(1) # [batch_sz x 1 x emb_sz]
                 x = torch.cat((x, attn_ctx),2) # [batch_sz x 1 x (emb_sz+hid_sz)]
                 h_n, h = self.rnn(x, h) # h_n: [batch_sz x 1 x hid_sz] h: [1 x batch_sz x hid_sz]
                 queries=[h.transpose(0,1)] # [[batch_sz x 1 x hid_sz]]
                 attn_weights, attn_ctx = self.attn(enc_hids, queries, enc_hids_mask) 
                                   # attn_ctx: [batch_sz x 1 x hid_sz] weights: [batch_sz x seq_len x 1]
-                out=self.out(torch.cat((h_n, attn_ctx),2)) # out: [batch_sz x 1 x vocab_sz]
+                out=self.out(torch.cat((h_n, attn_ctx),2)) # out: [batch_sz x 1 x vocab_sz]                
                 decoded = out if di==0 else torch.cat([decoded, out],1) # decoded: [batch_sz x maxlen x vocab_sz]
         else:
             if context is not None:            
                 repeated_context = context.unsqueeze(1).repeat(1, maxlen, 1) # [batch_sz x max_len x hid_sz]
-                inputs = torch.cat([inputs, repeated_context], 2)                
+                inputs = torch.cat([inputs, repeated_context], 2)
+                
             #self.rnn.flatten_parameters()
             hids, h = self.rnn(inputs, h)         
             decoded = self.out(hids.contiguous().view(-1, self.hidden_size))# reshape before linear over vocab
             decoded = decoded.view(batch_size, maxlen, self.vocab_size)
-        return decoded
+        return decoded, h
     
-    def sampling(self, init_h, enc_hids, context,  maxlen, mode='greedy'):
+    def sampling(self, init_h, enc_hids, context, maxlen, mode='greedy', to_numpy=True):
         """
         A simple greedy sampling
         :param init_h: [batch_sz x hid_sz]
-        :param encoder_hids: [batch_sz x seq_len x hid_sz] encoder hiddens for attention
+        :param enc_hids: a tuple of (enc_hids, mask) for attention use. [batch_sz x seq_len x hid_sz]
         """
         batch_size=init_h.size(0)
-        decoded_words = np.zeros((batch_size, maxlen), dtype=np.int)
-        sample_lens=np.zeros(batch_size, dtype=np.int)         
-    
+        decoded_words = gVar(torch.zeros(batch_size, maxlen)).long()  
+        sample_lens, len_inc = gVar(torch.zeros(batch_size)).long(), gVar(torch.ones(batch_size)).long()
+               
         x = gVar(torch.LongTensor([[SOS_ID]*batch_size]).view(batch_size,1))# [batch_sz x 1] (1=seq_len)
-        x = self.embedding(x) if self.embedding is not None else x #[batch_sz x seqlen x emb_sz]
-        
         h = init_h.unsqueeze(0) # [1 x batch_sz x hid_sz]   
-        enc_hids, enc_hids_mask = enc_hids
-        attn_ctx = gVar(torch.zeros(batch_size,1, self.hidden_size))
-        
-        for di in range(maxlen):
-            if self.use_attention:
-                x = torch.cat((x, attn_ctx),2) # [batch_sz x 1 x hid_sz]
-                h_n, h = self.rnn(x, h) # h_n: [batch_sz x 1 x hid_sz] h: [1 x batch_sz x hid_sz]
-                queries=[h.transpose(0,1)] # [[batch_sz x 1 x hid_sz]]
-                attn_weights, attn_ctx = self.attn(enc_hids, queries, enc_hids_mask) 
-                                  # attn_ctx: [batch_sz x 1 x hid_sz] weights: [batch_sz x seq_len x 1]
-                out=self.out(torch.cat((h_n, attn_ctx),2)) # out: [batch_sz x 1 x vocab_sz]
-                
-            else:
-                x = torch.cat([x, context.unsqueeze(1)],2) if context is not None else x
-                h_n, h = self.rnn(x, h) #decoder_output:[batch_sz x 1 x vocab_sz]
-                out=self.out(h_n)# out: [batch_sz x 1 x vocab_sz]
-                
+        for di in range(maxlen):               
+            out, h = self.forward(h.squeeze(0), enc_hids, context, x)
             if mode=='greedy':
-                topi = decoder_output[:,-1].max(1, keepdim=True)[1] # topi:[batch_sz x 1] indexes of predicted words
+                x = out[:,-1].max(1, keepdim=True)[1] # x:[batch_sz x 1] indexes of predicted words
             elif mode=='sample':
-                topi = torch.multinomial(F.softmax(decoder_output[:,-1], dim=1), 1)                    
-            x = self.embedding(topi) if self.embedding is not None else topi
-            decoded_words[:,di] = topi.squeeze().data.cpu().numpy() #!!
-                    
-        for i in range(batch_size):
-            for word in decoded_words[i]:
-                if word == EOS_ID:
-                    break
-                sample_lens[i]=sample_lens[i]+1
-        return decoded_words, sample_lens  
+                x = torch.multinomial(F.softmax(out[:,-1], dim=1), 1)    
+            decoded_words[:,di] = x.squeeze()
+            len_inc=len_inc*(x.squeeze()!=EOS_ID).long() # stop increse length (set 0 bit) when EOS is met
+            sample_lens=sample_lens+len_inc            
+        
+        if to_numpy:
+            decoded_words = decoded_words.data.cpu().numpy()
+            sample_lens = sample_lens.data.cpu().numpy()
+        return decoded_words, sample_lens
     
-    def beam_search(self, init_h, enc_hids, context, beam_size, max_unroll):
-        """
-        Args:
-            init_h (variable, FloatTensor): [batch_size x hid_size]
-            encoder_hids: [batch_size x seq_len x hid_size]
-        Return:
-            out: [batch_size, seq_len]
-        """
-        batch_size = init_h.size(0)
-        x = gVar(torch.LongTensor([SOS_ID] *batch_size*beam_size))# [batch_size*beam_size]
-        if self.use_attention:             
-            enc_hids, enc_hids_mask = enc_hids
-            enc_hids = enc_hids.repeat(beam_size, 1, 1) # repeat encoder hiddens by beam_size times
-            enc_hids_mask = enc_hids_mask.repeat(beam_size, 1) 
-        h = init_h.unsqueeze(0).repeat(1,beam_size,1).contiguous() # [n_layers=1 x (batch_size*beam_size) x hid_size]
-            # ?? tile or repeat?
-            
-        batch_position = gVar(torch.arange(0, batch_size).long() * beam_size) #[batch_size]  
-           #Points where batch starts in [batch_size x beam_size] tensors 
-           # [0, beam_size, beam_size * 2, .., beam_size * (batch_size-1)]  Eg. position_idx[5]: when 5-th batch starts
-
-        # Initialize scores of sequence [(batch_size*beam_size)]
-        # Ex. batch_size: 5, beam_size: 3  [0, -inf, -inf, 0, -inf, -inf, 0, -inf, -inf, 0, -inf, -inf, 0, -inf, -inf]
-        score = torch.ones(batch_size*beam_size) * -float('inf')
-        score.index_fill_(0, torch.arange(0, batch_size).long() * beam_size, 0.0)
-        score = gVar(score)
+    def beam_decode(self, init_h, enc_hids, context, beam_width, max_unroll, topk=1):
+        '''
+        https://github.com/budzianowski/PyTorch-Beam-Search-Decoding/blob/master/decode_beam.py
+        :param init_h: input tensor of shape [B, H] for start of the decoding
+        :param enc_hids: if you are using attention mechanism you can pass encoder outputs, [B, T, H] where T is the maximum length of input sentence
+        :param topk: how many sentence do you want to generate
+        :return: decoded_batch
+        '''        
+        batch_size=init_h.size(0)
+        decoded_words = np.zeros((batch_size, topk, max_unroll), dtype=np.int)
+        sample_lens =np.zeros((batch_size, topk), dtype=np.int)
+        scores = np.zeros((batch_size, topk))
         
-        beam = Beam(batch_size, beam_size, max_unroll, batch_position) # Initialize Beam that stores decisions for backtracking
-        
-        attn_ctx = gVar(torch.zeros(batch_size*beam_size, 1, self.hidden_size))
-        
-        for i in range(max_unroll):
-            x = x.view(-1, 1) # [(batch_size*beam_size)] => [(batch_size*beam_size) x 1]
-            x = self.embedding(x) if self.embedding is not None else x # [(batch_size*beam_size) x 1 x emb_sz]
-            if self.use_attention:
-                x = torch.cat((x, attn_ctx),2) # [batch_sz x 1 x hid_sz]
-                h_n, h = self.rnn(x, h)# h: [n_layers=1 x (batch_size*beam_size) x hidden_size]
-                queries=[h[0].unsqueeze(1)] # [[(batch_sz*beam_sz) x 1 x hid_sz]]
-                attn_weights, attn_ctx = self.attn(enc_hids, queries, enc_hids_mask) 
-                                  # attn_ctx: [batch_sz x 1 x hid_sz] weights: [batch_sz x seq_len x 1]
-                out=self.out(torch.cat((h_n, attn_ctx),2)).squeeze(1) # out: [(batch_sz*beam_sz) x vocab_sz]
+        for idx in range(batch_size): # decoding goes sentence by sentence
+            if isinstance(init_h, tuple):  # LSTM case
+                h = (init_h[0][idx,:].view(1,1,-1),init_h[1][idx,:].view(1,1,-1))
             else:
-                x = torch.cat([x, context.unsqueeze(1)],2) if context is not None else x
-                out, h = self.rnn(x, h)# h: [n_layers=1 x (batch_size*beam_size) x hidden_size]
-                out = self.out(out).squeeze(1)    # [(batch_size*beam_size) x vocab_size]    
-            
-            log_prob = F.log_softmax(out, dim=1) #[(batch_size*beam_size) x vocab_size]           
-            score = score.view(-1, 1) + log_prob# [(batch_size*beam_size)] => [(batch_size*beam_size) x vocab_size]
-            
-            # Select `beam size` transitions out of `vocab size` combinations
-            # [(batch_size*beam_size) x vocab_size]=> [batch_size x (beam_size*vocab_size)]
-            # Cutoff and retain candidates with top-k scores
-            # score: [batch_size, beam_size]
-            # top_k_idx: [batch_size, beam_size], each element of top_k_idx [0 ~ beam x vocab)
-            score, top_k_idx = score.view(batch_size, -1).topk(beam_size, dim=1)
+                h = init_h[idx,:].view(1,1,-1)            
+            enc_outs = enc_hids[idx,:,:].unsqueeze(0) if self.use_attention else None
 
-            # Get token ids with remainder after dividing by top_k_idx. Each element is among [0, vocab_size) 
-            # Ex. Index of token 3 in beam 4 : (4 * vocab size) + 3 => 3
-            x = (top_k_idx % self.vocab_size).view(-1) # x: [(batch_size*beam_size)]
+            # Start with the start of the sentence token
+            x = gVar(torch.LongTensor([[SOS_ID]]))
 
-            # top-k-pointer [(batch_size*beam_size)]
-            #       Points top-k beam that scored best at current step
-            #       Later used as back-pointer at backtracking
-            #       Each element is beam index: 0 ~ beam_size + position index: 0 ~ beam_size*(batch_size-1)
-            beam_idx = top_k_idx / self.vocab_size  # [batch_size, beam_size]
-            top_k_pointer = (beam_idx + batch_position.unsqueeze(1)).view(-1)
+            # Number of sentence to generate
+            endnodes = []
+            number_required = min((topk + 1), topk-len(endnodes))
 
-            # Select next h (size doesn't change)            
-            h = h.index_select(1, top_k_pointer)# [num_layers x (batch_size*beam_size) x hidden_size]
-            
-            beam.update(score.clone(), top_k_pointer, x)  # , h)# Update sequence scores at beam
+            # starting node -  hidden vector, previous node, word id, logp, length
+            node = BeamSearchNode(h, None, x, 0, 1)
+            nodes = PriorityQueue()
 
-            # Erase scores for EOS so that they are not expanded
-            eos_idx = x.data.eq(EOS_ID).view(batch_size, beam_size) # [batch_size x beam_size]
-            if eos_idx.nonzero().dim() > 0:
-                score.data.masked_fill_(eos_idx, -float('inf'))
+            # start the queue
+            nodes.put((-node.eval(), node))
+            qsize = 1
 
-        prediction, final_score, length = beam.backtrack() # prediction: [batch_size x n_samples x seq_len]
-        prediction = prediction.data.cpu().numpy()
-        final_score = final_score.data.cpu().numpy()
-        
-        return prediction, length, final_score
-    
-    
-class Beam(object):
-    def __init__(self, batch_size, beam_size, max_unroll, batch_position):
-        """Beam class for beam search"""
-        self.batch_size = batch_size
-        self.beam_size = beam_size
-        self.max_unroll = max_unroll
+            # start beam search
+            while True:
+                # give up when decoding takes too long
+                if qsize > 2000: break
 
-        # batch_position [batch_size]
-        #   [0, beam_size, beam_size * 2, .., beam_size * (batch_size-1)]
-        #   Points where batch starts in [batch_size x beam_size] tensors
-        #   Ex. position_idx[5]: when 5-th batch starts
-        self.batch_position = batch_position
+                # fetch the best node
+                score, n = nodes.get()
+                x = n.wordid
+                h = n.h
 
-        self.log_probs = list()  # [(batch*k, vocab_size)] * sequence_length
-        self.scores = list()  # [(batch*k)] * sequence_length
-        self.back_pointers = list()  # [(batch*k)] * sequence_length
-        self.token_ids = list()  # [(batch*k)] * sequence_length
-        # self.hidden = list()  # [(num_layers, batch*k, hidden_size)] * sequence_length
+                if n.wordid.item() == EOS_ID and n.prevNode != None:
+                    endnodes.append((score, n))
+                    # if we reached maximum # of sentences required
+                    if len(endnodes) >= number_required:
+                        break
+                    else:
+                        continue
+
+                # decode for one step using decoder
+                out, h = self.forward(h.squeeze(0), enc_outs, None, x) # out [1 x 1 x vocab_size]
+                out = out.squeeze(1)# [1 x vocab_size]
+
+                # PUT HERE REAL BEAM SEARCH OF TOP
+                log_prob, indexes = torch.topk(out, beam_width) # [1 x beam_width]
+                nextnodes = []
+
+                for new_k in range(beam_width):
+                    decoded_t = indexes[0][new_k].view(1, -1)
+                    log_p = log_prob[0][new_k].item()
+
+                    node = BeamSearchNode(h, n, decoded_t, n.logp + log_p, n.len + 1)
+                    score = -node.eval()
+                    nextnodes.append((score, node))
+
+                # put them into queue
+                for i in range(len(nextnodes)):
+                    score, nn = nextnodes[i]
+                    nodes.put((score, nn))
+                    # increase qsize
+                qsize += len(nextnodes) - 1
+
+            # choose nbest paths, back trace them
+            if len(endnodes) == 0:
+                endnodes = [nodes.get() for _ in range(topk)]
+
+            uid=0
+            for score, n in sorted(endnodes, key=operator.itemgetter(0)):
+                utterance, length, score = [], 0, 0.0
+                utterance.append(n.wordid)
+                # back trace
+                while n.prevNode != None:
+                    n = n.prevNode
+                    utterance.append(n.wordid)
+                    length=length+1
+                    score=score+n.logp
+                utterance = utterance[::-1] #reverse
+                decoded_words[idx,uid,:min(length, max_unroll)]=utterance[:min(length, max_unroll)]
+                sample_lens[idx,uid]=min(length, max_unroll)
+                scores[idx,uid]=score
+                uid=uid+1
+                
+        return decoded_words, sample_lens, scores
 
 
-    def update(self, score, back_pointer, token_id):  # , h):
-        """Append intermediate top-k candidates to beam at each step"""
-        self.scores.append(score)
-        self.back_pointers.append(back_pointer)
-        self.token_ids.append(token_id)
+class BeamSearchNode(object):
+    def __init__(self, hiddenstate, previousNode, wordId, logProb, length):
+        self.h = hiddenstate
+        self.prevNode = previousNode
+        self.wordid = wordId
+        self.logp = logProb
+        self.len = length
 
-    def backtrack(self):
-        """Backtracks over batch to generate optimal k-sequences
-        Returns:
-            prediction ([batch, k, max_unroll]) - A list of Tensors containing predicted sequence
-            final_score [batch, k] - A list containing the final scores for all top-k sequences
-            length [batch, k] - A list specifying the length of each sequence in the top-k candidates
-        """
-        prediction = list()
-        
-        length = [[self.max_unroll] * self.beam_size for _ in range(self.batch_size)]# Initialize for length of top-k sequences
-
-        # Last step output of the beam are not sorted => sort here!
-        # Size not changed [batch size, beam_size]
-        top_k_score, top_k_idx = self.scores[-1].topk(self.beam_size, dim=1)
-
-        top_k_score = top_k_score.clone()# Initialize sequence scores
-
-        n_eos_in_batch = [0] * self.batch_size
-
-        # Initialize Back-pointer from the last step
-        # Add self.position_idx for indexing variable with batch x beam as the first dimension
-        back_pointer = (top_k_idx + self.batch_position.unsqueeze(1)).view(-1)# [batch*beam]
-
-        for t in reversed(range(self.max_unroll)):
-                       
-            token_id = self.token_ids[t].index_select(0, back_pointer) # [batch*beam] # Reorder variables with the Back-pointer
-            back_pointer = self.back_pointers[t].index_select(0, back_pointer)# [batch*beam]  # Reorder the Back-pointer                   
-            eos_indices = self.token_ids[t].data.eq(EOS_ID).nonzero()# [< batch*beam] # Indices of ended sequences 
-
-            # For each batch, every time we see an EOS in the backtracking process,
-            # If not all sequences are ended
-            #    lowest scored survived sequence <- detected ended sequence
-            # if all sequences are ended
-            #    lowest scored ended sequence <- detected ended sequence
-            if eos_indices.dim() > 0:                
-                for i in range(eos_indices.size(0) - 1, -1, -1):  # Loop over all EOS at current step                  
-                    eos_idx = eos_indices[i, 0].item()# absolute index of detected ended sequence
-
-                    # At which batch EOS is located
-                    batch_idx = eos_idx // self.beam_size
-                    batch_start_idx = batch_idx * self.beam_size
-
-                    # if n_eos_in_batch[batch_idx] > self.beam_size:
-
-                    # Index of sequence with lowest score
-                    _n_eos_in_batch = n_eos_in_batch[batch_idx] % self.beam_size
-                    beam_idx_to_be_replaced = self.beam_size - _n_eos_in_batch - 1
-                    idx_to_be_replaced = batch_start_idx + beam_idx_to_be_replaced
-
-                    # Replace old information with new sequence information
-                    back_pointer[idx_to_be_replaced] = self.back_pointers[t][eos_idx].item()
-                    token_id[idx_to_be_replaced] = self.token_ids[t][eos_idx].item()
-                    top_k_score[batch_idx,
-                                beam_idx_to_be_replaced] = self.scores[t].view(-1)[eos_idx].item()
-                    length[batch_idx][beam_idx_to_be_replaced] = t + 1
-
-                    n_eos_in_batch[batch_idx] += 1
-            
-            prediction.append(token_id)# max_unroll * [batch x beam]
-
-        # Sort and re-order again as the added ended sequences may change the order        
-        top_k_score, top_k_idx = top_k_score.topk(self.beam_size, dim=1)# [batch, beam]
-        final_score = top_k_score.data
-
-        for batch_idx in range(self.batch_size):
-            length[batch_idx] = [length[batch_idx][beam_idx.item()]
-                                 for beam_idx in top_k_idx[batch_idx]]
-        
-        top_k_idx = (top_k_idx + self.batch_position.unsqueeze(1)).view(-1)# [batch x beam]
-
-        # Reverse the sequences and re-order at the same time
-        # It is reversed because the backtracking happens in the reverse order        
-        prediction = [step.index_select(0, top_k_idx).view(
-            self.batch_size, self.beam_size) for step in reversed(prediction)]# [batch, beam]
-
-        prediction = torch.stack(prediction, 2)# [batch, beam, max_unroll]
-
-        return prediction, final_score, length
-    
+    def eval(self, alpha=1.0):
+        reward = 0
+        # Add here a function for shaping a reward
+        return self.logp / float(self.len - 1 + 1e-6) + alpha * reward

@@ -29,13 +29,13 @@ class DeepAPI(nn.Module):
                                     True, config['n_layers'], config['noise_radius']) 
         self.decoder = Decoder(self.api_embedder, config['emb_size'], config['n_hidden']*2,
                                vocab_size, config['use_attention'], 1, config['dropout']) # utter decoder: P(x|c,z)
-        self.optimizer_AE = optim.Adadelta(list(self.encoder.parameters())
+        self.optimizer = optim.Adadelta(list(self.encoder.parameters())
                                       +list(self.decoder.parameters()),lr=config['lr_ae'], rho=0.95)
         self.criterion_ce = nn.CrossEntropyLoss()
     
     def forward(self, descs, desc_lens, apiseqs, api_lens):
         c, hids = self.encoder(descs, desc_lens)
-        output = self.decoder(c, hids, None, apiseqs[:,:-1], (api_lens-1)) 
+        output,_ = self.decoder(c, hids, None, apiseqs[:,:-1], (api_lens-1)) 
                                              # decode from z, c  # output: [batch x seq_len x n_tokens]   
         output = output.view(-1, self.vocab_size) # [batch*seq_len x n_tokens]
         
@@ -54,26 +54,26 @@ class DeepAPI(nn.Module):
         
         loss=self.forward(descs, desc_lens, apiseqs, api_lens)
         
-        self.optimizer_AE.zero_grad()
+        self.optimizer.zero_grad()
         loss.backward()
         # `clip_grad_norm` to prevent exploding gradient in RNNs / LSTMs
         torch.nn.utils.clip_grad_norm_(list(self.encoder.parameters())
                                      +list(self.decoder.parameters()), self.clip)
-        self.optimizer_AE.step()
-        return [('train_loss', loss.item())]      
+        self.optimizer.step()
+        return {'train_loss': loss.item()}      
     
     def valid(self, descs, desc_lens, apiseqs, api_lens):
         self.encoder.eval()  
         self.decoder.eval()        
         loss = self.forward(descs, desc_lens, apiseqs, api_lens)
-        return [('valid_loss', loss.item())]
+        return {'valid_loss': loss.item()}
         
     def sample(self, descs, desc_lens, n_samples, mode='beamsearch'):    
         self.encoder.eval()
         self.decoder.eval()
         c, hids = self.encoder(descs, desc_lens)
         if mode =='beamsearch':
-            sample_words, sample_lens, _ = self.decoder.beam_search(c, hids, None, n_samples, self.maxlen)
+            sample_words, sample_lens, _ = self.decoder.beam_decode(c, hids, None, 12, self.maxlen, n_samples)
                                                                    #[batch_size x n_samples x seq_len]
             sample_words, sample_lens = sample_words[0], sample_lens[0]
         else:

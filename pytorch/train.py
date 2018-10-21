@@ -120,26 +120,24 @@ for epoch in range(start_epoch, config['epochs']+1):
     # shuffle (re-define) data between epochs   
     train_loader=torch.utils.data.DataLoader(dataset=train_set, batch_size=config['batch_size'], shuffle=True, num_workers=1)
     train_data_iter=iter(train_loader)
-    n_iters=train_data_iter.__len__()/max(1, config['n_iters_d'])
+    n_iters=train_data_iter.__len__()
     
     itr = 1
     while True:# loop through all batches in training data
         model.train()
-        loss_records=[]
         try:
             descs, apiseqs, desc_lens, api_lens = train_data_iter.next() 
         except StopIteration: # end of epoch
             break 
         descs, apiseqs, desc_lens, api_lens = gVar(descs), gVar(apiseqs), gVar(desc_lens), gVar(api_lens)
-        loss_AE = model.train_AE(descs, desc_lens, apiseqs, api_lens)
-        loss_records.extend(loss_AE)                   
+        loss_AE = model.train_AE(descs, desc_lens, apiseqs, api_lens)                  
                                
         if itr % args.log_every == 0:
             elapsed = time.time() - itr_start_time
             log = '%s-%s|@gpu%d epo:[%d/%d] iter:[%d/%d] step_time:%ds elapsed:%s \n                      '\
             %(args.model, args.expname, args.gpu_id, epoch, config['epochs'],
                      itr, n_iters, elapsed, timeSince(epoch_start_time,itr/n_iters))
-            for loss_name, loss_value in loss_records:
+            for loss_name, loss_value in loss_AE.items():
                 log=log+loss_name+':%.4f '%(loss_value)
                 if args.visual:
                     tb_writer.add_scalar(loss_name, loss_value, itr_global)
@@ -155,7 +153,7 @@ for epoch in range(start_epoch, config['epochs']+1):
             for descs, apiseqs, desc_lens, api_lens in valid_loader:
                 descs, apiseqs, desc_lens, api_lens = gVar(descs), gVar(apiseqs), gVar(desc_lens), gVar(api_lens)
                 valid_loss = model.valid(descs, desc_lens, apiseqs, api_lens)    
-                for loss_name, loss_value in valid_loss:
+                for loss_name, loss_value in valid_loss.items():
                     v=loss_records.get(loss_name, [])
                     v.append(loss_value)
                     loss_records[loss_name]=v
