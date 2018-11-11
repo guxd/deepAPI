@@ -70,15 +70,16 @@ def main(args):
         print("Note that our pre-trained models require CUDA to evaluate.")
     
     # Load data
-    test_set=APIDataset(args.data_path+'valid.h5', conf['maxlen'])
+    test_set=APIDataset(args.data_path+'test.desc.shuf.h5', args.data_path+'test.apiseq.shuf.h5', conf['maxlen'])
     test_loader=torch.utils.data.DataLoader(dataset=test_set, batch_size=1, shuffle=False, num_workers=1)
-    vocab_api = load_dict(input_dir+'vocab.apiseq.pkl')
-    vocab_desc = load_dict(input_dir+'vocab.desc.pkl')
+    vocab_api = load_dict(args.data_path+'vocab.apiseq.pkl')
+    vocab_desc = load_dict(args.data_path+'vocab.desc.pkl')
     n_tokens = len(vocab_api)
 
     metrics=Metrics()
     
-    # Load model checkpoints    
+    # Load model checkpoints   
+    import model
     model = getattr(model, args.model)(conf, n_tokens)
     ckpt='./output/{}/{}/models/model_epo{}.pkl'.format(args.model, args.expname, args.reload_from)
     model.load_state_dict(torch.load(ckpt))

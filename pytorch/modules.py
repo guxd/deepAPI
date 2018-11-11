@@ -260,7 +260,11 @@ class Decoder(nn.Module):
                 h = (init_h[0][idx,:].view(1,1,-1),init_h[1][idx,:].view(1,1,-1))
             else:
                 h = init_h[idx,:].view(1,1,-1)            
-            enc_outs = enc_hids[idx,:,:].unsqueeze(0) if self.use_attention else None
+            if enc_hids is not None:
+                enc_outs, enc_outs_mask = enc_hids
+                enc_outs = enc_outs[idx,:,:].unsqueeze(0) 
+                enc_outs_mask = enc_outs_mask[idx, :].unsqueeze(0)
+                enc_outs = (enc_outs, enc_outs_mask)
 
             # Start with the start of the sentence token
             x = gVar(torch.LongTensor([[SOS_ID]]))
@@ -278,14 +282,13 @@ class Decoder(nn.Module):
             qsize = 1
 
             # start beam search
-            while True:
-                # give up when decoding takes too long
-                if qsize > 2000: break
-
-                # fetch the best node
-                score, n = nodes.get()
+            while True:                
+                if qsize > 2000: break # give up when decoding takes too long
+                    
+                score, n = nodes.get() # fetch the best node
                 x = n.wordid
                 h = n.h
+                qsize-=1
 
                 if n.wordid.item() == EOS_ID and n.prevNode != None:
                     endnodes.append((score, n))
@@ -298,25 +301,18 @@ class Decoder(nn.Module):
                 # decode for one step using decoder
                 out, h = self.forward(h.squeeze(0), enc_outs, None, x) # out [1 x 1 x vocab_size]
                 out = out.squeeze(1)# [1 x vocab_size]
+                out = F.log_softmax(out, 1)
 
                 # PUT HERE REAL BEAM SEARCH OF TOP
                 log_prob, indexes = torch.topk(out, beam_width) # [1 x beam_width]
-                nextnodes = []
 
                 for new_k in range(beam_width):
                     decoded_t = indexes[0][new_k].view(1, -1)
                     log_p = log_prob[0][new_k].item()
-
                     node = BeamSearchNode(h, n, decoded_t, n.logp + log_p, n.len + 1)
                     score = -node.eval()
-                    nextnodes.append((score, node))
-
-                # put them into queue
-                for i in range(len(nextnodes)):
-                    score, nn = nextnodes[i]
-                    nodes.put((score, nn))
-                    # increase qsize
-                qsize += len(nextnodes) - 1
+                    nodes.put((score, node))# put them into queue
+                    qsize += 1 # increase qsize
 
             # choose nbest paths, back trace them
             if len(endnodes) == 0:
@@ -324,15 +320,14 @@ class Decoder(nn.Module):
 
             uid=0
             for score, n in sorted(endnodes, key=operator.itemgetter(0)):
-                utterance, length, score = [], 0, 0.0
+                utterance, length = [], n.len
                 utterance.append(n.wordid)
                 # back trace
                 while n.prevNode != None:
                     n = n.prevNode
                     utterance.append(n.wordid)
-                    length=length+1
-                    score=score+n.logp
                 utterance = utterance[::-1] #reverse
+                utterance, length = utterance[1:], length-1 # remove <sos>
                 decoded_words[idx,uid,:min(length, max_unroll)]=utterance[:min(length, max_unroll)]
                 sample_lens[idx,uid]=min(length, max_unroll)
                 scores[idx,uid]=score
@@ -353,3 +348,8 @@ class BeamSearchNode(object):
         reward = 0
         # Add here a function for shaping a reward
         return self.logp / float(self.len - 1 + 1e-6) + alpha * reward
+    
+    def __lt__(self, other):
+        '''overwrith lt function. when two nodes have the same score, the priority queue will compare the two nodes themselves.'''
+        print("[warning] two nodes (%d-%d) have the same score, possible recursive (cycle) search."%(self.wordid, other.wordid) )
+        return True
