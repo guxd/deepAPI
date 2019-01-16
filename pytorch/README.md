@@ -11,6 +11,7 @@ It is a PyTorch implementation of deepAPI. See [Deep API Learning](https://arxiv
 ## Usage
 
 ### Dataset
+download data from [Google Driver](https://drive.google.com/drive/folders/1jBKMWZr5ZEyLaLgH34M7AjJ2v52Cq5vv?usp=sharing) and save them to the `./data` folder
 
 ### Train
    `$ python train.py`
