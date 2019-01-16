@@ -32,7 +32,7 @@ def evaluate(model, metrics, test_loader, vocab_desc, vocab_api, f_eval, repeat)
         # nparray: [repeat x seq_len]
         pred_sents, _ = indexes2sent(sample_words, vocab_api)
         pred_tokens = [sent.split(' ') for sent in pred_sents]
-        ref_str, _ =indexes2sent(apiseqs[0].numpy(), vocab_api, vocab["<s>"])
+        ref_str, _ =indexes2sent(apiseqs[0].numpy(), vocab_api, vocab["<s>"]) #vocab do not find???
         ref_tokens = ref_str.split(' ')
         
         max_bleu, avg_bleu = metrics.sim_bleu(pred_tokens, ref_tokens)
