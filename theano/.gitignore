@@ -1,5 +1,6 @@
 *.h5
 *.npz
+*.pyc
 data/*
 __pycache__/*
 groundhog/__pycache__/*

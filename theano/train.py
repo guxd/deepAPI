@@ -24,9 +24,8 @@ class RandomSamplePrinter(object):
 
     def __call__(self):
         def cut_eol(words):
-            for i, word in enumerate(words):
-                if words[i] == '<eol>':
-                    return words[:i + 1]
+            for i, word in enumerate(words): 
+                if words[i] == '</s>': return words[:i + 1]
             raise Exception("No end-of-line found")
 
         sample_idx = 0
@@ -34,14 +33,12 @@ class RandomSamplePrinter(object):
             batch = self.train_iter.next(peek=True)
             xs, ys = batch['x'], batch['y']
             for seq_idx in range(xs.shape[1]):
-                if sample_idx == self.state['n_examples']:
-                    break
+                if sample_idx == self.state['n_examples']: break
 
                 x, y = xs[:, seq_idx], ys[:, seq_idx]
                 x_words = cut_eol(list(map(lambda w_idx : self.model.word_indxs_src[w_idx], x)))
                 y_words = cut_eol(list(map(lambda w_idx : self.model.word_indxs[w_idx], y)))
-                if len(x_words) == 0:
-                    continue
+                if len(x_words) == 0: continue
                     
                 print("Input: {}".format(" ".join(x_words)))
                 print("Target: {}".format(" ".join(y_words)))
@@ -87,10 +84,8 @@ def main():
     main = MainLoop(train_data, None, None, lm_model, algo, state, None,
             reset=state['reset'],
             hooks=[RandomSamplePrinter(state, lm_model, train_data)]
-                if state['hookFreq'] >= 0
-                else None)
-    if state['reload']:
-        main.load()
+                if state['hookFreq'] >= 0 else None)
+    if state['reload']: main.load()
     if state['loopIters'] > 0:
         main.main()
 

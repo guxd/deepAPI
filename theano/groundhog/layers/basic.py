@@ -87,11 +87,8 @@ class Container(object):
             needed to compute the current layer/operator
         """
         if not collect_params:
-            if isinstance(arg, Container):
-                return arg.out
-            else:
-                return arg
-
+            if isinstance(arg, Container): return arg.out
+            else: return arg
 
         if isinstance(arg, Container):
             self.merge_params(arg)
@@ -196,10 +193,8 @@ class Layer(Container):
     """
     def __init__(self, n_in=0, n_out=0, rng=None, name=None):
         super(Layer, self).__init__()
-        if name:
-            self.name = name
-        else:
-            self.name = 'unknown_'+ id_generator(4)
+        if name: self.name = name
+        else: self.name = 'unknown_'+ id_generator(4)
         self.rng = rng
         self.n_in = n_in
         self.n_out = n_out
@@ -252,8 +247,7 @@ class Layer(Container):
         elif hasattr(new_obj, 'grads') and \
                 isinstance(other, theano.gof.Variable) and \
                 other.ndim == 0:
-            other_grads = TT.grad(other, new_obj.params,
-                                  disconnected_inputs='ignore')
+            other_grads = TT.grad(other, new_obj.params, disconnected_inputs='ignore')
             new_obj.grads = [x - y for x,y in zip(new_obj.grads,
                                                   other_grads)]
         elif hasattr(new_obj, 'grads'):
@@ -382,8 +376,7 @@ class Layer(Container):
 
     def _as_TensorVariable(self):
         print ('WARNING: you might loose track of parameters or inputs '\
-               'because layer ' + self.name +' is being converted to a '\
-               'theano variable')
+               'because layer ' + self.name +' is being converted to a theano variable')
         return self.out
 
 
@@ -396,10 +389,8 @@ class Layer(Container):
         if not hasattr(self, 'get_cost'):
             raise TypeError('Non-output layer does not support this method')
         new_obj = utils.copy(self)
-        try:
-            o_args, o_kwargs = new_obj.prev_args
-        except:
-            o_args, o_kwargs = ([], {})
+        try: o_args, o_kwargs = new_obj.prev_args
+        except: o_args, o_kwargs = ([], {})
 
         kwargs = dict([(k, new_obj.tensor_from_layer(v)) for k,v in kwargs.items()])
         for (k,v) in kwargs.items():
@@ -417,13 +408,10 @@ class Layer(Container):
         if not hasattr(self, 'get_grads'):
             raise TypeError('Non-output layer does not support this method')
         new_obj = utils.copy(self)
-        try:
-            o_args, o_kwargs = new_obj.prev_args
-        except:
-            o_args, o_kwargs = ([], {})
+        try: o_args, o_kwargs = new_obj.prev_args
+        except: o_args, o_kwargs = ([], {})
         kwargs = dict([(k, new_obj.tensor_from_layer(v)) for k,v in kwargs.items()])
-        for (k,v) in kwargs.items():
-            o_kwargs[k] = v
+        for (k,v) in kwargs.items(): o_kwargs[k] = v
         new_obj.prev_args = (o_args, o_kwargs)
         new_obj.get_grads(*o_args, **o_kwargs)
         return new_obj
@@ -494,16 +482,10 @@ class Model(Container):
     """
     Model class. It respects the interface expected by the trainer.
     """
-    def __init__(self, output_layer,
-                 sample_fn,
-                 word_dict="/data/lisa/data/PennTreebankCorpus/dictionaries.npz",
-                 word_dict_src=None,
-                 rng =None):
+    def __init__(self, output_layer, sample_fn, word_dict, word_dict_src=None, rng =None):
         super(Model, self).__init__()
-        if rng == None:
-            rng = numpy.random.RandomState(123)
-        assert hasattr(output_layer,'grads'), \
-                'The model needs to have gradients defined'
+        if rng == None: rng = numpy.random.RandomState(123)
+        assert hasattr(output_layer,'grads'), 'The model needs to have gradients defined'
         self.rng = rng
         self.trng = RandomStreams(rng.randint(1000)+1)
         self.sample_fn = sample_fn

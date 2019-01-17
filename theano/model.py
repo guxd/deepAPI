@@ -275,28 +275,22 @@ class Decoder(EncoderDecoderBase):
     SAMPLING = 1 # given the input context vector c and predict the target sequence
     BEAM_SEARCH = 2 #given the input context vector c and search good target sequence
 
-    def __init__(self, state, rng, prefix='dec',
-            skip_init=False, compute_alignment=False):
+    def __init__(self, state, rng, prefix='dec', skip_init=False, compute_alignment=False):
         self.state = state
         self.rng = rng
         self.prefix = prefix
         self.skip_init = skip_init
         self.compute_alignment = compute_alignment
 
-        # Actually there is a problem here -
-        # we don't make difference between number of input layers
-        # and outputs layers.
+        # Actually there is a problem here - we don't make difference between number of input layers and outputs layers.
         self.num_levels = self.state['decoder_stack']#number of hidden layers
 
         # support multiple gating/memory units
-        if 'dim_mult' not in self.state:
-            self.state['dim_mult'] = 1.
-        if 'hid_mult' not in self.state:
-            self.state['hid_mult'] = 1.
+        if 'dim_mult' not in self.state: self.state['dim_mult'] = 1.
+        if 'hid_mult' not in self.state: self.state['hid_mult'] = 1.
 
     def create_layers(self):
         """ Create all elements of Decoder's computation graph"""
-
         self.default_kwargs = dict(
             init_fn=self.state['weight_init_fn'] if not self.skip_init else "sample_zeros",
             weight_noise=self.state['weight_noise'],
@@ -376,20 +370,17 @@ class Decoder(EncoderDecoderBase):
             for level in range(self.num_levels):
                 # Input contributions
                 self.decode_inputers[level] = MultiLayer(
-                    self.rng,
-                    name='{}_dec_inputter_{}'.format(self.prefix, level),
+                    self.rng, name='{}_dec_inputter_{}'.format(self.prefix, level),
                     **decoding_kwargs)
                 # Update gate contributions
                 if prefix_lookup(self.state, 'dec', 'rec_gating'):
                     self.decode_updaters[level] = MultiLayer(
-                        self.rng,
-                        name='{}_dec_updater_{}'.format(self.prefix, level),
+                        self.rng, name='{}_dec_updater_{}'.format(self.prefix, level),
                         **decoding_kwargs)
                 # Reset gate contributions
                 if prefix_lookup(self.state, 'dec', 'rec_reseting'):
                     self.decode_reseters[level] = MultiLayer(
-                        self.rng,
-                        name='{}_dec_reseter_{}'.format(self.prefix, level),
+                        self.rng, name='{}_dec_reseter_{}'.format(self.prefix, level),
                         **decoding_kwargs)
 
     def _create_readout_layers(self):
@@ -482,35 +473,30 @@ class Decoder(EncoderDecoderBase):
 
         :param y:
             if mode == evaluation
-                target sequences, matrix of word indices of shape (max_seq_len, batch_size),
-                where each column is a sequence
+                target sequences, matrix of word indices of shape (max_seq_len, batch_size), where each column is a sequence
             if mode != evaluation
                 a vector of previous words of shape (n_samples,)
 
         :param y_mask:
-            if mode == evaluation a 0/1 matrix determining lengths
-                of the target sequences, must be None otherwise
+            if mode == evaluation a 0/1 matrix determining lengths of the target sequences, must be None otherwise
 
         :param mode:
             chooses on of three modes: evaluation, sampling and beam_search
                 where evaluation means given both input and output sequences, sampling means given input and predict target
 
         :param given_init_states:
-            for sampling and beam_search. A list of hidden states
-                matrices for each layer, each matrix is (n_samples, dim)
+            for sampling and beam_search. A list of hidden states matrices for each layer, each matrix is (n_samples, dim)
 
         :param T:
             sampling temperature
         """
 
         # Check parameter consistency
-        if mode == Decoder.EVALUATION:
-            assert not given_init_states
+        if mode == Decoder.EVALUATION: assert not given_init_states
         else:
             assert not y_mask
             assert given_init_states
-            if mode == Decoder.BEAM_SEARCH:
-                assert T == 1
+            if mode == Decoder.BEAM_SEARCH: assert T == 1
 
         # For log-likelihood evaluation the representation
         # be replicated for conveniency. In case backward RNN is used
@@ -606,18 +592,15 @@ class Decoder(EncoderDecoderBase):
                     #This implicitly wraps each element of result.out with a Layer to keep track of the parameters.
                     #It is equivalent to h=result[0], ctx=result[1] etc. 
                     h, ctx, alignment = result
-                    if mode == Decoder.EVALUATION:
-                        alignment = alignment.out
+                    if mode == Decoder.EVALUATION: alignment = alignment.out
                 else:
                     #This implicitly wraps each element of result.out with a Layer to keep track of the parameters.
                     #It is equivalent to h=result[0], ctx=result[1]
                     h, ctx = result
             else:
                 h = result
-                if mode == Decoder.EVALUATION:
-                    ctx = c
-                else:
-                    ctx = ReplicateLayer(given_init_states[0].shape[0])(c[c_pos]).out
+                if mode == Decoder.EVALUATION: ctx = c
+                else: ctx = ReplicateLayer(given_init_states[0].shape[0])(c[c_pos]).out
             hidden_layers.append(h)
             contexts.append(ctx)
 
@@ -638,19 +621,13 @@ class Decoder(EncoderDecoderBase):
         # ... where dim_r depends on 'deep_out' option.
         readout = self.repr_readout(contexts[0])
         for level in range(self.num_levels):
-            if mode != Decoder.EVALUATION:
-                read_from = init_states[level]
-            else:
-                read_from = hidden_layers[level]
+            if mode != Decoder.EVALUATION: read_from = init_states[level]
+            else: read_from = hidden_layers[level]
             read_from_var = read_from if type(read_from) == theano.tensor.TensorVariable else read_from.out
-            if read_from_var.ndim == 3:
-                read_from_var = read_from_var[:,:,:self.state['dim']]
-            else:
-                read_from_var = read_from_var[:,:self.state['dim']]
-            if type(read_from) != theano.tensor.TensorVariable:
-                read_from.out = read_from_var
-            else:
-                read_from = read_from_var
+            if read_from_var.ndim == 3: read_from_var = read_from_var[:,:,:self.state['dim']]
+            else: read_from_var = read_from_var[:,:self.state['dim']]
+            if type(read_from) != theano.tensor.TensorVariable: read_from.out = read_from_var
+            else: read_from = read_from_var
             readout += self.hidden_readouts[level](read_from)
         if self.state['bigram']:
             if mode != Decoder.EVALUATION:
@@ -676,25 +653,17 @@ class Decoder(EncoderDecoderBase):
             readout = fun(readout)
 
         if mode == Decoder.SAMPLING:
-            sample = self.output_layer.get_sample(
-                    state_below=readout,
-                    temp=T)
-            # Current SoftmaxLayer.get_cost is stupid,
-            # that's why we have to reshape a lot.
-            self.output_layer.get_cost(
-                    state_below=readout.out,
-                    temp=T,
-                    target=sample)
+            sample = self.output_layer.get_sample(state_below=readout, temp=T)
+            # Current SoftmaxLayer.get_cost is stupid, that's why we have to reshape a lot.
+            self.output_layer.get_cost(state_below=readout.out, temp=T, target=sample)
             log_prob = self.output_layer.cost_per_sample
             return [sample] + [log_prob] + hidden_layers
         elif mode == Decoder.BEAM_SEARCH:
-            return self.output_layer(
-                    state_below=readout.out,
-                    temp=T).out
+            return self.output_layer(state_below=readout.out,temp=T).out
         elif mode == Decoder.EVALUATION:#return cost expression w.r.t x and y from the output layer
             return (self.output_layer.train(#see Layer.train at /Groundhog/layers/basic.py. 
-                                            #The actual output_layer for evaluation is the CostLayer/SoftmaxLayer at costlayers.py
-                                            #The cost expression is constructed there in the SoftmaxLayer class 
+                                 #The actual output_layer for evaluation is the CostLayer/SoftmaxLayer at costlayers.py
+                                 #The cost expression is constructed there in the SoftmaxLayer class 
                     state_below=readout,
                     target=y,
                     mask=y_mask,
@@ -741,7 +710,7 @@ class Decoder(EncoderDecoderBase):
 
     def build_sampler(self, n_samples, n_steps, T, c):
         states = [TT.zeros(shape=(n_samples,), dtype='int64'),
-                TT.zeros(shape=(n_samples,), dtype='float32')]
+               TT.zeros(shape=(n_samples,), dtype='float32')]
         init_c = c[0, -self.state['dim']:]
         states += [ReplicateLayer(n_samples)(init(init_c).out).out for init in self.initializers]
 
@@ -760,12 +729,10 @@ class Decoder(EncoderDecoderBase):
         return (outputs[0], outputs[1]), updates
 
     def build_next_probs_predictor(self, c, step_num, y, init_states):
-        return self.build_decoder(c, y, mode=Decoder.BEAM_SEARCH,
-                given_init_states=init_states, step_num=step_num)
+        return self.build_decoder(c, y, mode=Decoder.BEAM_SEARCH, given_init_states=init_states, step_num=step_num)
 
     def build_next_states_computer(self, c, step_num, y, init_states):
-        return self.build_decoder(c, y, mode=Decoder.SAMPLING,
-                given_init_states=init_states, step_num=step_num)[2:]
+        return self.build_decoder(c, y, mode=Decoder.SAMPLING, given_init_states=init_states, step_num=step_num)[2:]
 
 class RNNEncoderDecoder(object):
     """This class encapsulates the main translation model.
@@ -779,9 +746,7 @@ class RNNEncoderDecoder(object):
     when called complile and return functions that do useful stuff.
     """
 
-    def __init__(self, state, rng,
-            skip_init=False,
-            compute_alignment=False):
+    def __init__(self, state, rng, skip_init=False, compute_alignment=False):
         """Constructor.
 
         :param state:
@@ -794,7 +759,6 @@ class RNNEncoderDecoder(object):
         :param compute_alignment:
             If True, the alignment is returned by the decoder.
         """
-
         self.state = state
         self.rng = rng
         self.skip_init = skip_init
@@ -817,27 +781,19 @@ class RNNEncoderDecoder(object):
         training_c_components = []
 
         logger.debug("Create encoder")
-        self.encoder = Encoder(self.state, self.rng,
-                prefix="enc",
-                skip_init=self.skip_init)
+        self.encoder = Encoder(self.state, self.rng, prefix="enc", skip_init=self.skip_init)
         self.encoder.create_layers()
 
         logger.debug("Build encoding computation graph")
-        forward_training_c = self.encoder.build_encoder(
-                self.x, self.x_mask,
-                use_noise=True,
-                return_hidden_layers=True)
+        forward_training_c = self.encoder.build_encoder(self.x, self.x_mask,use_noise=True, return_hidden_layers=True)
         
-
         logger.debug("Create backward encoder")
-        self.backward_encoder = Encoder(self.state, self.rng,
-                prefix="back_enc",
-                skip_init=self.skip_init)
+        self.backward_encoder = Encoder(self.state, self.rng, prefix="back_enc", skip_init=self.skip_init)
         self.backward_encoder.create_layers()
 
         logger.debug("Build backward encoding computation graph")
         backward_training_c = self.backward_encoder.build_encoder(
-                self.x[::-1],#here -1 means reverse?
+                self.x[::-1], # here -1 means reverse
                 self.x_mask[::-1],
                 use_noise=True,
                 approx_embeddings=self.encoder.approx_embedder(self.x[::-1]),
@@ -848,8 +804,7 @@ class RNNEncoderDecoder(object):
         if self.state['forward']:
             training_c_components.append(forward_training_c)
         if self.state['last_forward']:
-            training_c_components.append(
-                    ReplicateLayer(self.x.shape[0])(forward_training_c[-1]))
+            training_c_components.append(ReplicateLayer(self.x.shape[0])(forward_training_c[-1]))
         if self.state['backward']:
             training_c_components.append(backward_training_c)
         if self.state['last_backward']:
@@ -859,8 +814,7 @@ class RNNEncoderDecoder(object):
             #the real dimension of context vector is the sum of dimensions of all c components
 
         logger.debug("Create decoder")
-        self.decoder = Decoder(self.state, self.rng,
-                skip_init=self.skip_init, compute_alignment=self.compute_alignment)
+        self.decoder = Decoder(self.state, self.rng, skip_init=self.skip_init, compute_alignment=self.compute_alignment)
         self.decoder.create_layers()
         logger.debug("Build log-likelihood computation graph")
         self.predictions, self.alignment = self.decoder.build_decoder(
@@ -879,8 +833,7 @@ class RNNEncoderDecoder(object):
         self.n_steps = TT.lscalar("n_steps")
         self.T = TT.scalar("T")
         self.forward_sampling_c = self.encoder.build_encoder(
-                self.sampling_x,
-                return_hidden_layers=True).out
+                self.sampling_x, return_hidden_layers=True).out
         self.backward_sampling_c = self.backward_encoder.build_encoder(
                 self.sampling_x[::-1],
                 approx_embeddings=self.encoder.approx_embedder(self.sampling_x[::-1]),
@@ -898,14 +851,12 @@ class RNNEncoderDecoder(object):
 
         self.sampling_c = Concatenate(axis=1)(*sampling_c_components).out
         (self.sample, self.sample_log_prob), self.sampling_updates =\
-            self.decoder.build_sampler(self.n_samples, self.n_steps, self.T,
-                    c=self.sampling_c)
+            self.decoder.build_sampler(self.n_samples, self.n_steps, self.T, c=self.sampling_c)
 
         logger.debug("Create auxiliary variables")
         self.c = TT.matrix("c")
         self.step_num = TT.lscalar("step_num")
-        self.current_states = [TT.matrix("cur_{}".format(i))
-                for i in range(self.decoder.num_levels)]
+        self.current_states = [TT.matrix("cur_{}".format(i)) for i in range(self.decoder.num_levels)]
         self.gen_y = TT.lvector("gen_y")
 
     def create_lm_model(self):
@@ -913,8 +864,7 @@ class RNNEncoderDecoder(object):
         create language model based on the encoder-decoder
         to generate target sequence given an input sequence.
         """
-        if hasattr(self, 'lm_model'):
-            return self.lm_model
+        if hasattr(self, 'lm_model'): return self.lm_model
         self.lm_model = LM_Model(
             cost_layer=self.predictions,
             sample_fn=self.create_sampler(),
@@ -970,13 +920,11 @@ class RNNEncoderDecoder(object):
                     inputs=self.inputs,
                     outputs=[-self.predictions.cost_per_sample],
                     name="score_fn")
-        if batch:
-            return self.score_fn
+        if batch: return self.score_fn
         def scorer(x, y):
             x_mask = numpy.ones(x.shape[0], dtype="float32")
             y_mask = numpy.ones(y.shape[0], dtype="float32")
-            return self.score_fn(x[:, None], y[:, None],
-                    x_mask[:, None], y_mask[:, None])
+            return self.score_fn(x[:, None], y[:, None], x_mask[:, None], y_mask[:, None])
         return scorer
 
     def create_next_probs_computer(self):
@@ -997,7 +945,6 @@ class RNNEncoderDecoder(object):
                     name="next_states_fn",on_unused_input='warn')
         return self.next_states_fn
 
-
     def create_probs_computer(self, return_alignment=False):
         if not hasattr(self, 'probs_fn'):
             logger.debug("Compile probs computer")
@@ -1008,11 +955,8 @@ class RNNEncoderDecoder(object):
         def probs_computer(x, y):
             x_mask = numpy.ones(x.shape[0], dtype="float32")
             y_mask = numpy.ones(y.shape[0], dtype="float32")
-            probs, alignment = self.probs_fn(x[:, None], y[:, None],
-                    x_mask[:, None], y_mask[:, None])
-            if return_alignment:
-                return probs, alignment
-            else:
-                return probs
+            probs, alignment = self.probs_fn(x[:, None], y[:, None], x_mask[:, None], y_mask[:, None])
+            if return_alignment: return probs, alignment
+            else: return probs
         return probs_computer
     

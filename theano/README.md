@@ -9,7 +9,7 @@ Theano implementation of DeepAPI ([Deep API Learning](https://arxiv.org/abs/1605
  ```bash
    pip install -r requirements.txt
    cd 
-   vim .theanorc
+   vim ~/.theanorc
 ```
 ```
 [global]

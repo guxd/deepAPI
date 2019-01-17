@@ -37,19 +37,8 @@ from groundhog.utils import print_time #,print_mem
 
 
 class MainLoop(object):
-    def __init__(self,
-                 train_data,
-                 valid_data,
-                 test_data,
-                 model,
-                 algo,
-                 state,
-                 channel,
-                 hooks=None,
-                 reset=-1,
-                 train_cost=False,
-                 validate_postprocess=None,
-                 l2_params=False):
+    def __init__(self, train_data, valid_data, test_data, model, algo, state, channel,
+                 hooks=None, reset=-1, train_cost=False, validate_postprocess=None, l2_params=False):
         """
         :type train_data: groundhog dataset object
         :param train_data: data iterator used for training
@@ -72,12 +61,10 @@ class MainLoop(object):
             jobman to fill in a psql table)
 
         :type channel: jobman handler
-        :param channel: jobman handler used to communicate with a psql
-            server
+        :param channel: jobman handler used to communicate with a psql server
 
         :type hooks: function or list of functions
-        :param hooks: list of functions that are called every `hookFreq`
-            steps to carry on various diagnostics
+        :param hooks: list of functions that are called every `hookFreq` steps to carry on various diagnostics
 
         :type reset: int
         :param reset: if larger than 0, the train_data iterator position is
@@ -85,8 +72,7 @@ class MainLoop(object):
 
         :type train_cost: bool
         :param train_cost: flag saying if the training error (over the
-            entire training set) should be computed every time the validation
-            error is computed
+            entire training set) should be computed every time the validation error is computed
 
         :type validate_postprocess: None or function
         :param validate_postprocess: function called on the validation cost
@@ -140,12 +126,9 @@ class MainLoop(object):
         for pname in model.valid_costs:
             self.state['valid'+pname] = 1e20
             self.state['test'+pname] = 1e20
-            self.timings['fulltrain'+pname] = numpy.zeros((n_elems,),
-                                                          dtype='float32')
-            self.timings['valid'+pname] = numpy.zeros((n_elems,),
-                                                      dtype='float32')
-            self.timings['test'+pname] = numpy.zeros((n_elems,),
-                                                     dtype='float32')
+            self.timings['fulltrain'+pname] = numpy.zeros((n_elems,), dtype='float32')
+            self.timings['valid'+pname] = numpy.zeros((n_elems,), dtype='float32')
+            self.timings['test'+pname] = numpy.zeros((n_elems,), dtype='float32')
         if self.channel is not None:
             self.channel.save()
 
@@ -294,13 +277,11 @@ class MainLoop(object):
             # Save the temp model
             if self.step > 0 and (time.time() - self.save_time)/60. >= self.state['saveFreq']:
                 self.save()
-                if self.channel is not None:
-                    self.channel.save()
+                if self.channel is not None: self.channel.save()
                 self.save_time = time.time()
                 
             st = time.time()
-            try:
-                
+            try:                
                 rvals = self.algo() # call the training algorithm and get the return values e.g., cost, grad, time...
                 
                 self.state['traincost'] = float(rvals['cost'])
@@ -317,8 +298,7 @@ class MainLoop(object):
                    numpy.isnan(rvals['cost'])) and self.state['on_nan'] == 'raise':
                     self.state['gotNaN'] = 1
                     self.save()
-                    if self.channel:
-                        self.channel.save()
+                    if self.channel: self.channel.save()
                     print ('Got NaN while training')
                     last_cost = 0
                 if self.valid_data is not None and\
@@ -327,8 +307,7 @@ class MainLoop(object):
                     valcost = self.validate()
                     if valcost > self.old_cost * self.state['cost_threshold']:
                         self.patience -= 1
-                        if 'lr_start' in self.state and\
-                           self.state['lr_start'] == 'on_error':
+                        if 'lr_start' in self.state and self.state['lr_start'] == 'on_error':
                                 self.state['lr_start'] = self.step
                     elif valcost < self.old_cost:
                         self.patience = self.state['patience']
@@ -340,8 +319,7 @@ class MainLoop(object):
                         self.algo.lr = self.algo.lr / self.state['divide_lr']
                         bparams = dict(self.model.best_params)
                         self.patience = self.state['patience']
-                        for p in self.model.params:
-                            p.set_value(bparams[p.name])
+                        for p in self.model.params: p.set_value(bparams[p.name])
 
                 if self.state['hookFreq'] > 0 and \
                    self.step % self.state['hookFreq'] == 0 and self.hooks:
@@ -358,11 +336,9 @@ class MainLoop(object):
                 break
 
         self.state['wholetime'] = float(time.time() - start_time+self.whole_time)
-        if self.valid_data is not None:
-            self.validate()
+        if self.valid_data is not None: self.validate()
         self.save()
-        if self.channel:
-            self.channel.save()
+        if self.channel: self.channel.save()
         print ('Took', (time.time() - start_time)/60., 'min')
         avg_step = self.timings['time_step'][:self.step].mean()
         avg_cost2expl = self.timings['log2_p_expl'][:self.step].mean()

@@ -25,13 +25,13 @@ def prototype_state():
     # (all Nones in this section are placeholders for required values)
 
     # A string representation for the unknown word placeholder for both language
-    state['oov'] = 'UNK'
+    state['oov'] = '<unk>'
     # These are unknown word placeholders
-    state['unk_sym_source'] = 1
-    state['unk_sym_target'] = 1
+    state['unk_sym_source'] = 3
+    state['unk_sym_target'] = 3
     # These are end-of-sequence marks
-    state['null_sym_source'] = None
-    state['null_sym_target'] = None
+    state['null_sym_source'] = 2
+    state['null_sym_target'] = 2
     # These are vocabulary sizes for the source and target languages
     state['n_sym_source'] = None
     state['n_sym_target'] = None
@@ -219,12 +219,12 @@ def prototype_phrase_state():
     state = prototype_state()
 
     state['datafolder']="./data/"
-    state['source'] = [state['datafolder']+"train.desc.shuf.h5"]
-    state['target'] = [state['datafolder']+"train.apiseq.shuf.h5"]
-    state['word_indx'] = state['datafolder']+"vocab.desc.pkl"
-    state['word_indx_trgt'] = state['datafolder']+"vocab.apiseq.pkl"
-    state['word_weight']=state['datafolder']+"wordidf.desc.pkl"
-    state['word_weight_trgt'] = state['datafolder']+"wordidf.apiseq.pkl"
+    state['source'] = [state['datafolder']+"train.desc.h5"]
+    state['target'] = [state['datafolder']+"train.apiseq.h5"]
+    state['word_indx'] = state['datafolder']+"vocab.desc.json"
+    state['word_indx_trgt'] = state['datafolder']+"vocab.apiseq.json"
+    state['word_weight']=state['datafolder']+"wordidf.desc.json"
+    state['word_weight_trgt'] = state['datafolder']+"wordidf.apiseq.json"
 
     state['null_sym_source'] = 10000
     state['null_sym_target'] = 10000
@@ -245,13 +245,13 @@ def prototype_search_state():
     state = prototype_state()
     
     state['datafolder']="./data/"
-    state['source'] = [state['datafolder']+"train.desc.shuf.h5"]
-    state['target'] = [state['datafolder']+"train.apiseq.shuf.h5"]
+    state['source'] = [state['datafolder']+"train.desc.h5"]
+    state['target'] = [state['datafolder']+"train.apiseq.h5"]
    
-    state['word_indx'] = state['datafolder']+"vocab.desc.pkl"
-    state['word_indx_trgt'] = state['datafolder']+"vocab.apiseq.pkl"
-    state['word_weight']=state['datafolder']+"wordidf.desc.pkl"
-    state['word_weight_trgt'] = state['datafolder']+"wordidf.apiseq.pkl"
+    state['word_indx'] = state['datafolder']+"vocab.desc.json"
+    state['word_indx_trgt'] = state['datafolder']+"vocab.apiseq.json"
+    state['word_weight']=state['datafolder']+"wordidf.desc.json"
+    state['word_weight_trgt'] = state['datafolder']+"wordidf.apiseq.json"
 
     state['null_sym_source'] = 10000
     state['null_sym_target'] = 10000

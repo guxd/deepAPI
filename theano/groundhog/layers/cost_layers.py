@@ -186,43 +186,28 @@ class CostLayer(Layer):
                     for x in self.noise_params]
 
         else:
-            W_em = self.init_fn(self.n_in,
-                                self.n_out,
-                                self.sparsity,
-                                self.scale,
-                                self.rng)
-            self.W_em = theano.shared(W_em,
-                                      name='W_%s' % self.name)
+            W_em = self.init_fn(self.n_in, self.n_out, self.sparsity, self.scale, self.rng)
+            self.W_em = theano.shared(W_em, name='W_%s' % self.name)
             self.b_em = theano.shared(
                 self.bias_fn(self.n_out, self.bias_scale, self.rng),
                 name='b_%s' % self.name)
 
             self.params += [self.W_em, self.b_em]
             if self.weight_noise:
-                self.nW_em = theano.shared(W_em*0.,
-                                           name='noise_W_%s' % self.name)
-                self.nb_em = theano.shared(
-                    numpy.zeros((self.n_out,), dtype=theano.config.floatX),
+                self.nW_em = theano.shared(W_em*0., name='noise_W_%s' % self.name)
+                self.nb_em = theano.shared(numpy.zeros((self.n_out,), dtype=theano.config.floatX),
                     name='noise_b_%s' % self.name)
                 self.noise_params = [self.nW_em, self.nb_em]
-                self.noise_params_shape_fn = [
-                    constant_shape(x.get_value().shape)
-                    for x in self.noise_params]
+                self.noise_params_shape_fn = [constant_shape(x.get_value().shape) for x in self.noise_params]
         self.additional_weights = []
         self.noise_additional_weights = []
         if self.additional_inputs:
             for pos, size in enumerate(self.additional_inputs):
-                W_add = self.init_fn(size,
-                                    self.n_out,
-                                    self.sparsity,
-                                    self.scale,
-                                    self.rng)
-                self.additional_weights += [theano.shared(W_add,
-                                  name='W_add%d_%s'%(pos, self.name))]
+                W_add = self.init_fn(size, self.n_out, self.sparsity, self.scale, self.rng)
+                self.additional_weights += [theano.shared(W_add, name='W_add%d_%s'%(pos, self.name))]
                 if self.weight_noise:
                     self.noise_additional_weights += [
-                        theano.shared(W_add*0.,
-                                      name='noise_W_add%d_%s'%(pos, self.name))]
+                        theano.shared(W_add*0., name='noise_W_add%d_%s'%(pos, self.name))]
         self.params = self.params + self.additional_weights
         self.noise_params += self.noise_additional_weights
         self.noise_params_shape_fn += [
@@ -329,21 +314,18 @@ class CostLayer(Layer):
 
         :type target: tensor or layer
         :param target: The theano expression (or groundhog layer)
-            representing the target (used to evaluate the prediction of the
-            output layer)
+            representing the target (used to evaluate the prediction of the output layer)
 
         :type mask: None or mask or layer
         :param mask: Mask, depicting which of the predictions should be
-            ignored (e.g. due to them resulting from padding a sequence
-            with 0s)
+            ignored (e.g. due to them resulting from padding a sequence with 0s)
 
         :type temp: float or tensor scalar
         :param temp: scalar representing the temperature that should be used
             when sampling from the output distribution
 
         :type reg: None or layer or theano scalar expression
-        :param reg: additional regularization term that should be added to
-            the cost
+        :param reg: additional regularization term that should be added to the cost
 
         :type scale: float or None or theano scalar
         :param scale: scaling factor with which the cost is multiplied
@@ -413,8 +395,7 @@ class CostLayer(Layer):
 
     def _get_samples(self, model, length=30, temp=1, *inps):
         """
-        Sample a sequence from the model `model` whose output layer is given
-        by `self`.
+        Sample a sequence from the model `model` whose output layer is given by `self`.
 
         :type model: groundhog model class
         :param model: model that has `self` as its output layer
@@ -425,7 +406,6 @@ class CostLayer(Layer):
         :type temp: float
         :param temp: temperature to use during sampling
         """
-
         raise NotImplemented
 
 
@@ -434,20 +414,17 @@ class SigmoidLayer(CostLayer):
     """
     Sigmoid output layer.
     """
-
     def _get_samples(self, model, length=30, temp=1, *inps):
         """
         See parent class.
         """
-
         if not hasattr(model, 'word_indxs_src'):
             model.word_indxs_src = model.word_indxs
 
         character_level = False
         if hasattr(model, 'character_level'):
             character_level = model.character_level
-        if model.del_noise:
-            model.del_noise()
+        if model.del_noise: model.del_noise()
         [c,values, probs] = model.sample_fn(length, temp, *inps)# get samples (c is the context vector of source sentence)
         # Assumes values matrix
         #print 'Generated sample is:'
@@ -459,29 +436,25 @@ class SigmoidLayer(CostLayer):
                 if character_level:
                     sen = []
                     for k in xrange(inps[0].shape[0]):
-                        if model.word_indxs_src[inps[0][k][d]] == '<eol>':
-                            break
+                        if model.word_indxs_src[inps[0][k][d]] == '</s>': break
                         sen.append(model.word_indxs_src[inps[0][k][d]])
                     print ("".join(sen),)
                 else:
                     for k in xrange(inps[0].shape[0]):
                         print (model.word_indxs_src[inps[0][k][d]],)
-                        if model.word_indxs_src[inps[0][k][d]] == '<eol>':
-                            break
+                        if model.word_indxs_src[inps[0][k][d]] == '</s>': break
                 print ('')
                 print ('Output: ',)
                 if character_level:
                     sen = []
                     for k in xrange(values.shape[0]):
-                        if model.word_indxs[values[k][d]] == '<eol>':
-                            break
+                        if model.word_indxs[values[k][d]] == '</s>': break
                         sen.append(model.word_indxs[values[k][d]])
                     print ("".join(sen),)
                 else:
                     for k in xrange(values.shape[0]):
                         print (model.word_indxs[values[k][d]],)
-                        if model.word_indxs[values[k][d]] == '<eol>':
-                            break
+                        if model.word_indxs[values[k][d]] == '</s>': break
                 print()
                 print()
         else:
@@ -489,28 +462,28 @@ class SigmoidLayer(CostLayer):
             if character_level:
                 sen = []
                 for k in xrange(inps[0].shape[0]):
-                    if model.word_indxs_src[inps[0][k]] == '<eol>':
+                    if model.word_indxs_src[inps[0][k]] == '</s>':
                         break
                     sen.append(model.word_indxs_src[inps[0][k]])
                 print ("".join(sen),)
             else:
                 for k in xrange(inps[0].shape[0]):
                     print (model.word_indxs_src[inps[0][k]],)
-                    if model.word_indxs_src[inps[0][k]] == '<eol>':
+                    if model.word_indxs_src[inps[0][k]] == '</s>':
                         break
             print ('')
             print ('Output: ',)
             if character_level:
                 sen = []
                 for k in xrange(values.shape[0]):
-                    if model.word_indxs[values[k]] == '<eol>':
+                    if model.word_indxs[values[k]] == '</s>':
                         break
                     sen.append(model.word_indxs[values[k]])
                 print ("".join(sen)),
             else:
                 for k in xrange(values.shape[0]):
                     print (model.word_indxs[values[k]],)
-                    if model.word_indxs[values[k]] == '<eol>':
+                    if model.word_indxs[values[k]] == '</s>':
                         break
             print()
             print()
@@ -681,29 +654,25 @@ class SoftmaxLayer(CostLayer):
                 if character_level:
                     sen = []
                     for k in range(inps[0].shape[0]):
-                        if model.word_indxs_src[inps[0][k][d]] == '<eol>':
-                            break
+                        if model.word_indxs_src[inps[0][k][d]] == '</s>': break
                         sen.append(model.word_indxs_src[inps[0][k][d]])
                     print ("".join(sen),end="")
                 else:
                     for k in range(inps[0].shape[0]):
                         print (model.word_indxs_src[inps[0][k][d]],end="")
-                        if model.word_indxs_src[inps[0][k][d]] == '<eol>':
-                            break
+                        if model.word_indxs_src[inps[0][k][d]] == '</s>': break
                 print ('')
                 print ('Output: ', end="")
                 if character_level:
                     sen = []
                     for k in range(values.shape[0]):
-                        if model.word_indxs[values[k][d]] == '<eol>':
-                            break
+                        if model.word_indxs[values[k][d]] == '</s>': break
                         sen.append(model.word_indxs[values[k][d]])
                     print ("".join(sen),end="")
                 else:
                     for k in range(values.shape[0]):
                         print (model.word_indxs[values[k][d]],end="")
-                        if model.word_indxs[values[k][d]] == '<eol>':
-                            break
+                        if model.word_indxs[values[k][d]] == '</s>': break
                 print()
                 print()
         else:
@@ -711,29 +680,25 @@ class SoftmaxLayer(CostLayer):
             if character_level:
                 sen = []
                 for k in range(inps[0].shape[0]):
-                    if model.word_indxs_src[inps[0][k]] == '<eol>':
-                        break
+                    if model.word_indxs_src[inps[0][k]] == '</s>': break
                     sen.append(model.word_indxs_src[inps[0][k]])
                 print ("".join(sen),end=" ")
             else:
                 for k in range(inps[0].shape[0]):
                     print (model.word_indxs_src[inps[0][k]],end=" ")
-                    if model.word_indxs_src[inps[0][k]] == '<eol>':
-                        break
+                    if model.word_indxs_src[inps[0][k]] == '</s>': break
             print ('')
             print ('Output: ',end="")
             if character_level:
                 sen = []
                 for k in range(values.shape[0]):
-                    if model.word_indxs[values[k]] == '<eol>':
-                        break
+                    if model.word_indxs[values[k]] == '</s>': break
                     sen.append(model.word_indxs[values[k]])
                 print ("".join(sen),end="")
             else:
                 for k in range(values.shape[0]):
                     print (model.word_indxs[values[k]],end=" ")
-                    if model.word_indxs[values[k]] == '<eol>':
-                        break
+                    if model.word_indxs[values[k]] == '</s>': break
             print()
             print()
 
@@ -835,10 +800,8 @@ class SoftmaxLayer(CostLayer):
         pvals = class_probs
         if pvals.ndim == 1:
             pvals = pvals.dimshuffle('x', 0)
-        sample = self.trng.multinomial(pvals=pvals,
-                                       dtype='int64').argmax(axis=-1)
-        if class_probs.ndim == 1:
-            sample = sample[0]
+        sample = self.trng.multinomial(pvals=pvals, dtype='int64').argmax(axis=-1)
+        if class_probs.ndim == 1: sample = sample[0]
         self.sample = sample
         return sample
 
@@ -957,15 +920,10 @@ class SoftmaxLayer(CostLayer):
             else:# for evaluation(log-likelihood graph), this branch is executed
                 self.cost = TT.mean(self.cost_per_sample)#compute the average cost sum for each sentence
         else:#for sampling, this branch is executed
-            if mask:
-                self.cost=cost.sum()/mask.sum()#cost per_sequence_element
-            else:
-                self.cost = cost.mean()
-        if scale:
-            self.cost = self.cost*scale
-        if reg:
-            self.cost = self.cost + reg
-
+            if mask: self.cost=cost.sum()/mask.sum()#cost per_sequence_element
+            else: self.cost = cost.mean()
+        if scale: self.cost = self.cost*scale
+        if reg: self.cost = self.cost + reg
             
         self.mask = mask
         self.cost_scale = scale

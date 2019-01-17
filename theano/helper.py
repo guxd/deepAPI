@@ -9,8 +9,7 @@ def create_padded_batch(state, x, y, return_dict=False):
     """A callback given to the iterator to transform data in suitable format
 
     :type x: list
-    :param x: list of numpy.array's, each array is a batch of phrases
-        in some of source languages
+    :param x: list of numpy.array's, each array is a batch of phrases in some of source languages
 
     :type y: list
     :param y: same as x but for target languages
@@ -48,29 +47,22 @@ def create_padded_batch(state, x, y, return_dict=False):
     # Fill X and Xmask
     for idx in range(len(x[0])):
         # Insert sequence idx in a column of matrix X
-        if mx < len(x[0][idx]):
-            X[:mx, idx] = x[0][idx][:mx]
-        else:
-            X[:len(x[0][idx]), idx] = x[0][idx][:mx]
+        if mx < len(x[0][idx]): X[:mx, idx] = x[0][idx][:mx]
+        else: X[:len(x[0][idx]), idx] = x[0][idx][:mx]
 
         # Mark the end of phrase
-        if len(x[0][idx]) < mx:
-            X[len(x[0][idx]):, idx] = state['null_sym_source']
+        if len(x[0][idx]) < mx: X[len(x[0][idx]):, idx] = state['null_sym_source']
 
-        # Initialize Xmask column with ones in all positions that
-        # were just set in X
+        # Initialize Xmask column with ones in all positions that were just set in X
         Xmask[:len(x[0][idx]), idx] = 1.
-        if len(x[0][idx]) < mx:
-            Xmask[len(x[0][idx]), idx] = 1.
+        if len(x[0][idx]) < mx: Xmask[len(x[0][idx]), idx] = 1.
 
     # Fill Y and Ymask in the same way as X and Xmask in the previous loop
     for idx in range(len(y[0])):
         Y[:len(y[0][idx]), idx] = y[0][idx][:my]
-        if len(y[0][idx]) < my:
-            Y[len(y[0][idx]):, idx] = state['null_sym_target']
+        if len(y[0][idx]) < my: Y[len(y[0][idx]):, idx] = state['null_sym_target']
         Ymask[:len(y[0][idx]), idx] = 1.
-        if len(y[0][idx]) < my:
-            Ymask[len(y[0][idx]), idx] = 1.
+        if len(y[0][idx]) < my: Ymask[len(y[0][idx]), idx] = 1.
 
     null_inputs = numpy.zeros(X.shape[1])
 
@@ -93,22 +85,18 @@ def create_padded_batch(state, x, y, return_dict=False):
     Y = Y[:,valid_inputs.nonzero()[0]]
     Xmask = Xmask[:,valid_inputs.nonzero()[0]]
     Ymask = Ymask[:,valid_inputs.nonzero()[0]]
-    if len(valid_inputs.nonzero()[0]) <= 0:
-        return None
+    if len(valid_inputs.nonzero()[0]) <= 0: return None
 
     # Unknown words
     X[X >= state['n_sym_source']] = state['unk_sym_source']
     Y[Y >= state['n_sym_target']] = state['unk_sym_target']
 
-    if return_dict:
-        return {'x' : X, 'x_mask' : Xmask, 'y': Y, 'y_mask' : Ymask}
-    else:
-        return X, Xmask, Y, Ymask
+    if return_dict: return {'x' : X, 'x_mask' : Xmask, 'y': Y, 'y_mask' : Ymask}
+    else: return X, Xmask, Y, Ymask
 
 def get_batch_iterator(state):
 
     class Iterator(PytablesBitextIterator):
-
         def __init__(self, *args, **kwargs):
             PytablesBitextIterator.__init__(self, *args, **kwargs)
             self.batch_iter = None
@@ -126,10 +114,8 @@ def get_batch_iterator(state):
                         else numpy.arange(len(x))
                 for k in range(k_batches):
                     indices = order[k * batch_size:(k + 1) * batch_size]
-                    batch = create_padded_batch(state, [x[indices]], [y[indices]],
-                            return_dict=True)
-                    if batch:
-                        yield batch
+                    batch = create_padded_batch(state, [x[indices]], [y[indices]], return_dict=True)
+                    if batch: yield batch
 
         def next(self, peek=False):
             if not self.batch_iter:
@@ -143,11 +129,9 @@ def get_batch_iterator(state):
                 self.peeked_batch = None
                 return batch
 
-            if not self.batch_iter:
-                raise StopIteration
+            if not self.batch_iter: raise StopIteration
             batch = next(self.batch_iter)
-            if peek:
-                self.peeked_batch = batch
+            if peek: self.peeked_batch = batch
             return batch
 
     train_data = Iterator(
@@ -164,13 +148,11 @@ def get_batch_iterator(state):
 
 
 def none_if_zero(x):
-    if x == 0:
-        return None
+    if x == 0: return None
     return x
 
 def prefix_lookup(state, p, s):
-    if '%s_%s'%(p,s) in state:
-        return state['%s_%s'%(p, s)]
+    if '%s_%s'%(p,s) in state: return state['%s_%s'%(p, s)]
     return state[s]
 
 
@@ -180,10 +162,8 @@ def parse_input(state, word2idx, line, raise_unk=False, idx2word=None, unk_sym=-
     :param word2idx: a dictionary of [word,index]
     :param line: input sentence
     """
-    if unk_sym < 0:
-        unk_sym = state['unk_sym_source']
-    if null_sym < 0:
-        null_sym = state['null_sym_source']
+    if unk_sym < 0: unk_sym = state['unk_sym_source']
+    if null_sym < 0: null_sym = state['null_sym_source']
     seqin = line.split()
     seqlen = len(seqin)
     seq = numpy.zeros(seqlen+1, dtype='int64')
@@ -196,7 +176,7 @@ def parse_input(state, word2idx, line, raise_unk=False, idx2word=None, unk_sym=-
 
     seq[-1] = null_sym
     if idx2word:
-        idx2word[null_sym] = '<eos>'
+        idx2word[null_sym] = '</s>'
         idx2word[unk_sym] = state['oov']
         parsed_in = [idx2word[sx] for sx in seq]
         return seq, " ".join(parsed_in)
