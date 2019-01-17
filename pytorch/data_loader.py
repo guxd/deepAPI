@@ -1,4 +1,5 @@
 import sys
+import json
 import torch 
 import torch.utils.data as data
 import torch.nn as nn
@@ -24,7 +25,6 @@ class APIDataset(data.Dataset):
         api_table = tables.open_file(api_file)
         self.api_data = api_table.get_node('/phrases')
         self.api_index = api_table.get_node('/indices')
-        
         
         desc_table = tables.open_file(desc_file)
         self.desc_data = desc_table.get_node('/phrases')
@@ -65,7 +65,7 @@ class APIDataset(data.Dataset):
     
     
 def load_dict(filename):
-    return pickle.load(open(filename,'rb'))
+    return json.loads(open(filename, "r", encoding="utf-8").readline())
 
 def load_vecs(fin):         
     """read vectors (2D numpy array) from a hdf5 file"""

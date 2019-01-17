@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 import random
-
+from tqdm import tqdm
 import torch
 import torch.nn as nn
 import os, sys
@@ -10,7 +10,7 @@ sys.path.insert(0, parentPath)# add parent folder to path so as to import common
 from helper import indexes2sent, gVar, gData
 import model, data, configs
 from metrics import Metrics
-from data import APIDataset, load_dict, load_vecs
+from data_loader import APIDataset, load_dict, load_vecs
 
 
 def evaluate(model, metrics, test_loader, vocab_desc, vocab_api, f_eval, repeat):
@@ -19,7 +19,7 @@ def evaluate(model, metrics, test_loader, vocab_desc, vocab_api, f_eval, repeat)
     
     recall_bleus, prec_bleus = [], []
     local_t = 0
-    for descs, apiseqs, desc_lens, api_lens in test_loader:
+    for descs, apiseqs, desc_lens, api_lens in tqdm(test_loader):
         
         if local_t>2000:
             break
@@ -32,7 +32,7 @@ def evaluate(model, metrics, test_loader, vocab_desc, vocab_api, f_eval, repeat)
         # nparray: [repeat x seq_len]
         pred_sents, _ = indexes2sent(sample_words, vocab_api)
         pred_tokens = [sent.split(' ') for sent in pred_sents]
-        ref_str, _ =indexes2sent(apiseqs[0].numpy(), vocab_api, vocab["<s>"])
+        ref_str, _ =indexes2sent(apiseqs[0].numpy(), vocab_api, vocab_api["<s>"])
         ref_tokens = ref_str.split(' ')
         
         max_bleu, avg_bleu = metrics.sim_bleu(pred_tokens, ref_tokens)
@@ -70,10 +70,10 @@ def main(args):
         print("Note that our pre-trained models require CUDA to evaluate.")
     
     # Load data
-    test_set=APIDataset(args.data_path+'test.desc.shuf.h5', args.data_path+'test.apiseq.shuf.h5', conf['maxlen'])
+    test_set=APIDataset(args.data_path+'test.desc.h5', args.data_path+'test.apiseq.h5', conf['maxlen'])
     test_loader=torch.utils.data.DataLoader(dataset=test_set, batch_size=1, shuffle=False, num_workers=1)
-    vocab_api = load_dict(args.data_path+'vocab.apiseq.pkl')
-    vocab_desc = load_dict(args.data_path+'vocab.desc.pkl')
+    vocab_api = load_dict(args.data_path+'vocab.apiseq.json')
+    vocab_desc = load_dict(args.data_path+'vocab.desc.json')
     n_tokens = len(vocab_api)
 
     metrics=Metrics()

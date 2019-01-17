@@ -41,7 +41,7 @@ def sent2indexes(sentence, vocab):
         inds = np.zeros((len(sentence), max_len), dtype=np.int)
         for i, idxes in enumerate(indexes):
             inds[i,:len(idxes)]=indexes[i]
-        return inds
+        return indsss
     else:
         return convert_sent(sentence, vocab)
 
@@ -54,8 +54,7 @@ def indexes2sent(indexes, vocab, ignore_tok=PAD_ID):
         for idx in indexes:
             toks.append(ivocab[idx])
             length+=1
-            if idx == EOS_ID:
-                break
+            if idx == EOS_ID: break
         return ' '.join(toks), length
     
     ivocab = {v: k for k, v in vocab.items()}

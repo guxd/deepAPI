@@ -145,7 +145,7 @@ class AttentionPooling(nn.Module):
 
         for i, query in enumerate(queries):
             score_before_transformation = score_before_transformation + self.query_linears[i](query)
-        score_unnormalized = self.score_linear(F.tanh(score_before_transformation))
+        score_unnormalized = self.score_linear(torch.tanh(score_before_transformation))
         scores = self._calculate_scores(key, key_mask, score_unnormalized)
         context = torch.bmm(scores.transpose(1, 2), values)
         return scores, context

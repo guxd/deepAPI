@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 
 import os
@@ -29,8 +28,7 @@ class DeepAPI(nn.Module):
                                     True, config['n_layers'], config['noise_radius']) 
         self.decoder = Decoder(self.api_embedder, config['emb_size'], config['n_hidden']*2,
                                vocab_size, config['use_attention'], 1, config['dropout']) # utter decoder: P(x|c,z)
-        self.optimizer = optim.Adadelta(list(self.encoder.parameters())
-                                      +list(self.decoder.parameters()),lr=config['lr_ae'], rho=0.95)
+        self.optimizer = optim.Adadelta(self.parameters(),lr=config['lr_ae'], rho=0.95)
         self.criterion_ce = nn.CrossEntropyLoss()
     
     def forward(self, descs, desc_lens, apiseqs, api_lens):
@@ -40,7 +38,7 @@ class DeepAPI(nn.Module):
         output = output.view(-1, self.vocab_size) # [batch*seq_len x n_tokens]
         
         dec_target = apiseqs[:,1:].contiguous().view(-1)
-        mask = dec_target.gt(0) # [(batch_sz*seq_len)]
+        mask = dec_target.gt(PAD_ID) # [(batch_sz*seq_len)]
         masked_target = dec_target.masked_select(mask) # 
         output_mask = mask.unsqueeze(1).expand(mask.size(0), self.vocab_size)# [(batch_sz*seq_len) x n_tokens]
         
@@ -49,28 +47,24 @@ class DeepAPI(nn.Module):
         return loss
     
     def train_AE(self, descs, desc_lens, apiseqs, api_lens):
-        self.encoder.train()
-        self.decoder.train()
+        self.train()
         
         loss=self.forward(descs, desc_lens, apiseqs, api_lens)
         
         self.optimizer.zero_grad()
         loss.backward()
         # `clip_grad_norm` to prevent exploding gradient in RNNs / LSTMs
-        torch.nn.utils.clip_grad_norm_(list(self.encoder.parameters())
-                                     +list(self.decoder.parameters()), self.clip)
+        torch.nn.utils.clip_grad_norm_(self.parameters(), self.clip)
         self.optimizer.step()
         return {'train_loss': loss.item()}      
     
     def valid(self, descs, desc_lens, apiseqs, api_lens):
-        self.encoder.eval()  
-        self.decoder.eval()        
+        self.eval()       
         loss = self.forward(descs, desc_lens, apiseqs, api_lens)
         return {'valid_loss': loss.item()}
         
     def sample(self, descs, desc_lens, n_samples, mode='beamsearch'):    
-        self.encoder.eval()
-        self.decoder.eval()
+        self.eval()
         c, hids = self.encoder(descs, desc_lens)
         if mode =='beamsearch':
             sample_words, sample_lens, _ = self.decoder.beam_decode(c, hids, None, 12, self.maxlen, n_samples)

@@ -10,21 +10,21 @@ import os, sys
 parentPath = os.path.abspath("..")
 sys.path.insert(0, parentPath)# add parent folder to path so as to import common modules
 from helper import timeSince, sent2indexes, indexes2sent, gData, gVar
-import model, configs, data
-from data import APIDataset, APIDataset, load_dict, load_vecs
+import model, configs, data_loader
+from data_loader import APIDataset, APIDataset, load_dict, load_vecs
 from metrics import Metrics
 from sample import evaluate
 
 from tensorboardX import SummaryWriter # install tensorboardX (pip install tensorboardX) before importing this package
 
-parser = argparse.ArgumentParser(description='apiGAN Pytorch')
+parser = argparse.ArgumentParser(description='DeepAPI Pytorch')
 # Path Arguments
 parser.add_argument('--data_path', type=str, default='./data/', help='location of the data corpus')
 parser.add_argument('--model', type=str, default='DeepAPI', help='model name')
 parser.add_argument('--expname', type=str, default='basic', help='experiment name, for disinguishing different parameter settings')
 parser.add_argument('--visual', action='store_true', default=False, help='visualize training status in tensorboard')
 parser.add_argument('--reload_from', type=int, default=-1, help='reload from a trained ephoch')
-parser.add_argument('--gpu_id', type=int, default=0, help='GPU ID')
+parser.add_argument('--gpu_id', type=int, default=1, help='GPU ID')
 
 # Evaluation Arguments
 parser.add_argument('--sample', action='store_true', help='sample when decoding for generation')
@@ -84,11 +84,11 @@ config = getattr(configs, 'config_'+args.model)()
 ###############################################################################
 # Load data
 ###############################################################################
-train_set=APIDataset(args.data_path+'train.desc.shuf.h5', args.data_path+'train.apiseq.shuf.h5', config['maxlen'])
-valid_set=APIDataset(args.data_path+'test.desc.shuf.h5', args.data_path+'test.apiseq.shuf.h5', config['maxlen'])
+train_set=APIDataset(args.data_path+'train.desc.h5', args.data_path+'train.apiseq.h5', config['maxlen'])
+valid_set=APIDataset(args.data_path+'test.desc.h5', args.data_path+'test.apiseq.h5', config['maxlen'])
 
-vocab_api = load_dict(args.data_path+'vocab.apiseq.pkl')
-vocab_desc = load_dict(args.data_path+'vocab.desc.pkl')
+vocab_api = load_dict(args.data_path+'vocab.apiseq.json')
+vocab_desc = load_dict(args.data_path+'vocab.desc.json')
 n_tokens = len(vocab_api)
 
 metrics=Metrics()
