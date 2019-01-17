@@ -24,7 +24,7 @@ def timeSince(since, percent):
 
 
 
-PAD_ID, SOS_ID, EOS_ID, UNK_ID = [0, 0, 0, 1]
+PAD_ID, SOS_ID, EOS_ID, UNK_ID = [0, 1, 2, 3]
 
 
 #######################################################################
