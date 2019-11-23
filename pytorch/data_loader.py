@@ -23,12 +23,12 @@ class APIDataset(data.Dataset):
         
         print("loading data...")
         api_table = tables.open_file(api_file)
-        self.api_data = api_table.get_node('/phrases')
-        self.api_index = api_table.get_node('/indices')
+        self.api_data = api_table.get_node('/phrases')[:].astype(np.long)
+        self.api_index = api_table.get_node('/indices')[:]
         
         desc_table = tables.open_file(desc_file)
-        self.desc_data = desc_table.get_node('/phrases')
-        self.desc_index = desc_table.get_node('/indices')
+        self.desc_data = desc_table.get_node('/phrases')[:].astype(np.long)
+        self.desc_index = desc_table.get_node('/indices')[:]
         
         assert self.api_index.shape[0] == self.desc_index.shape[0], "inconsistent number of API sequences and NL descriptions!"
         self.data_len = self.api_index.shape[0]
@@ -36,10 +36,10 @@ class APIDataset(data.Dataset):
 
     def __getitem__(self, offset):
         pos, api_len =  self.api_index[offset]['pos'], self.api_index[offset]['length']
-        api = self.api_data[pos:pos + api_len].astype('int64')
+        api = self.api_data[pos:pos + api_len]
         
         pos, desc_len = self.desc_index[offset]['pos'], self.desc_index[offset]['length']
-        desc= self.desc_data[pos:pos+ desc_len].astype('int64')
+        desc= self.desc_data[pos:pos+ desc_len]
        
         ## Padding ##
         if len(api)<self.max_seq_len:
