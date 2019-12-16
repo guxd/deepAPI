@@ -23,27 +23,36 @@ def timeSince(since, percent):
     return '%s<%s'%(asHHMMSS(s), asHHMMSS(rs))
 
 
-
 PAD_ID, SOS_ID, EOS_ID, UNK_ID = [0, 1, 2, 3]
 
 
 #######################################################################
-def sent2indexes(sentence, vocab):
+import nltk
+try: nltk.word_tokenize("hello world")
+except LookupError: nltk.download('punkt')
+    
+def sent2indexes(sentence, vocab, maxlen):
     '''sentence: a string or list of string
        return: a numpy array of word indices
-    '''
-    def convert_sent(sent, vocab):
-        return np.array([vocab[word] for word in sent.split(' ')])
+    '''      
+    def convert_sent(sent, vocab, maxlen):
+        idxes = np.zeros(maxlen, dtype=np.int64)
+        idxes.fill(PAD_ID)
+        tokens = nltk.word_tokenize(sent.strip())
+        idx_len = min(len(tokens), maxlen)
+        for i in range(idx_len): idxes[i] = vocab.get(tokens[i], UNK_ID)
+        return idxes, idx_len
     if type(sentence) is list:
-        indexes=[convert_sent(sent, vocab) for sent in sentence]
-        sent_lens = [len(idxes) for idxes in indexes]
-        max_len = max(sent_lens)
-        inds = np.zeros((len(sentence), max_len), dtype=np.int)
-        for i, idxes in enumerate(indexes):
-            inds[i,:len(idxes)]=indexes[i]
-        return indsss
+        inds, lens = None, None
+        for sent in sentence:
+            idxes, idx_len = convert_sent(sent, vocab, maxlen)
+            idxes, idx_len = np.expand_dims(idxes, 0), np.array([idx_len])
+            inds = idxes if inds is None else np.concatenate((inds, idxes))
+            lens = idx_len if lens is None else np.concatenate((lens, idx_len))
+        return inds, lens
     else:
-        return convert_sent(sentence, vocab)
+        inds, lens = sent2indexes([sentence], vocab, maxlen)
+        return inds[0], lens[0]
 
 def indexes2sent(indexes, vocab, ignore_tok=PAD_ID): 
     '''indexes: numpy array'''
@@ -73,19 +82,17 @@ def indexes2sent(indexes, vocab, ignore_tok=PAD_ID):
 #########################################################################
 ########  For Sequence Padding and Masking #######
 import torch
-from torch.nn import functional as F
 
-use_cuda = torch.cuda.is_available()
-
-def gData(data):
-    tensor=data
-    if isinstance(data, np.ndarray):
-        tensor = torch.from_numpy(data)
-    if use_cuda:
-        tensor=tensor.cuda()
-    return tensor
-def gVar(data):
-    return gData(data)
+def get_position(lens, maxlen, left_pad=False):
+    """ transform sequence length to a series of positions. e.g., 3 -> 1,2,3"""
+    batch_size = lens.size(0)
+    pos = torch.zeros((batch_size, maxlen), dtype=torch.long, device=lens.device)
+    for i, input_len in enumerate(lens):
+        if not left_pad:
+            pos[i,:input_len] = torch.arange(1, input_len+1, dtype=torch.long, device=lens.device)
+        else:
+            pos[i,maxlen-input_len:] = torch.arange(1, input_len+1, dtype=torch.long, device=lens.device)
+    return pos
 
 def sequence_mask(sequence_length, max_len=None):
     '''
@@ -94,8 +101,7 @@ def sequence_mask(sequence_length, max_len=None):
     if max_len is None:
         max_len = sequence_length.data.max()
     batch_size = sequence_length.size(0)
-    seq_range = torch.arange(0, max_len).long()
+    seq_range = torch.arange(0, max_len, dtype=torch.long, device=sequence_length.device)
     seq_range_expand = seq_range.unsqueeze(0).expand(batch_size, max_len)
-    seq_range_expand = gVar(seq_range_expand)
     seq_length_expand = (sequence_length.unsqueeze(1).expand_as(seq_range_expand))
     return seq_range_expand < seq_length_expand

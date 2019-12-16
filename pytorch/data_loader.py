@@ -33,31 +33,26 @@ class APIDataset(data.Dataset):
         assert self.api_index.shape[0] == self.desc_index.shape[0], "inconsistent number of API sequences and NL descriptions!"
         self.data_len = self.api_index.shape[0]
         print("{} entries".format(self.data_len))
-
+        
+    def list2array(self, L, max_len, dtype=np.long, pad_idx=0):
+        '''  convert a list to an array or matrix  '''            
+        arr = np.zeros(max_len, dtype=dtype)+pad_idx
+        for i, v in enumerate(L): arr[i] = v
+        return arr
+    
     def __getitem__(self, offset):
-        pos, api_len =  self.api_index[offset]['pos'], self.api_index[offset]['length']
-        api = self.api_data[pos:pos + api_len]
+        pos, api_len = self.api_index[offset]['pos'], self.api_index[offset]['length']
+        api_len = min(int(api_len),self.max_seq_len-2) # real length of sequences
+        api = [SOS_ID] + self.api_data[pos: pos + api_len].tolist() + [EOS_ID]
         
         pos, desc_len = self.desc_index[offset]['pos'], self.desc_index[offset]['length']
-        desc= self.desc_data[pos:pos+ desc_len]
+        desc_len=min(int(desc_len),self.max_seq_len-2) # get real seq len
+        desc= [SOS_ID] + self.desc_data[pos: pos+ desc_len].tolist() + [EOS_ID]
        
         ## Padding ##
-        if len(api)<self.max_seq_len:
-            api=np.append(api, [PAD_ID]*self.max_seq_len)    
-            api=api[:self.max_seq_len]
-        else:
-            api=api[:self.max_seq_len]
-            api[-1]=EOS_ID
-        if len(desc)<self.max_seq_len:
-            desc=np.append(desc,[PAD_ID]*self.max_seq_len)
-            desc=desc[:self.max_seq_len]
-        else:
-            desc=desc[:self.max_seq_len]
-            desc[-1]=EOS_ID
+        api = self.list2array(api, self.max_seq_len, np.int, PAD_ID)
+        desc= self.list2array(desc, self.max_seq_len, np.int, PAD_ID)
         
-        ## get real seq len
-        api_len=min(int(api_len),self.max_seq_len) # real length of sequences for training
-        desc_len=min(int(desc_len),self.max_seq_len) 
         return desc, api, desc_len, api_len
 
     def __len__(self):
