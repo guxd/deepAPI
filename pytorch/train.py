@@ -14,6 +14,7 @@ import models, configs, data_loader
 from data_loader import APIDataset, APIDataset, load_dict, load_vecs
 from metrics import Metrics
 from sample import evaluate
+from modules import get_cosine_schedule_with_warmup
 
 from tensorboardX import SummaryWriter # install tensorboardX (pip install tensorboardX) before importing this package
 
@@ -69,6 +70,8 @@ def train(args):
     ###############################################################################
     train_set=APIDataset(args.data_path+'train.desc.h5', args.data_path+'train.apiseq.h5', config['max_sent_len'])
     valid_set=APIDataset(args.data_path+'test.desc.h5', args.data_path+'test.apiseq.h5', config['max_sent_len'])
+    train_loader=torch.utils.data.DataLoader(dataset=train_set, batch_size=config['batch_size'], shuffle=True, num_workers=1)
+    valid_loader=torch.utils.data.DataLoader(dataset=valid_set, batch_size=config['batch_size'], shuffle=True, num_workers=1)
     print("Loaded data!")
 
     ###############################################################################
@@ -78,6 +81,20 @@ def train(args):
     if args.reload_from>=0:
         load_model(model, args.reload_from)
     model=model.to(device)
+    
+    
+    ###############################################################################
+    # Prepare the Optimizer
+    ###############################################################################
+    no_decay = ['bias', 'LayerNorm.weight']
+    optimizer_grouped_parameters = [
+            {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
+            {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+    ]    
+    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=config['lr'], eps=config['adam_epsilon'])        
+    scheduler = get_cosine_schedule_with_warmup(
+            optimizer, num_warmup_steps=config['warmup_steps'], 
+            num_training_steps=len(train_loader)*config['epochs']) # do not foget to modify the number when dataset is changed
 
     ###############################################################################
     # Training
@@ -91,41 +108,37 @@ def train(args):
         itr_start_time = time.time()
 
         # shuffle (re-define) data between epochs   
-        train_loader=torch.utils.data.DataLoader(dataset=train_set, batch_size=config['batch_size'], shuffle=True, num_workers=1)
-        train_data_iter=iter(train_loader)
-        n_iters=train_data_iter.__len__()
 
-        itr = 1
-        while True:# loop through all batches in training data
+        for batch in train_loader:# loop through all batches in training data
             model.train()
-            try:
-                descs, apiseqs, desc_lens, api_lens = train_data_iter.next() 
-            except StopIteration: # end of epoch
-                break 
-            batch = [tensor.to(device) for tensor in [descs, desc_lens, apiseqs, api_lens]]
-            loss_AE = model.train_AE(*batch)                  
+            batch_gpu = [tensor.to(device) for tensor in batch]
+            loss = model(*batch_gpu)  
+            
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip'])
+            optimizer.step()
+            scheduler.step()
+            model.zero_grad()
 
-            if itr % args.log_every == 0:
+            if itr_global % args.log_every == 0:
                 elapsed = time.time() - itr_start_time
-                log = '%s-%s|@gpu%d epo:[%d/%d] iter:[%d/%d] step_time:%ds elapsed:%s \n                      '\
-                %(args.model, args.expname, args.gpu_id, epoch, config['epochs'],
-                         itr, n_iters, elapsed, timeSince(epoch_start_time,itr/n_iters))
-                for loss_name, loss_value in loss_AE.items():
-                    log=log+loss_name+':%.4f '%(loss_value)
-                    if args.visual:
-                        tb_writer.add_scalar(loss_name, loss_value, itr_global)
+                log = '%s-%s|@gpu%d epo:[%d/%d] iter:%d step_time:%ds loss:%f'\
+                %(args.model, args.expname, args.gpu_id, epoch, config['epochs'],itr_global, elapsed, loss)
+                if args.visual:
+                        tb_writer.add_scalar('loss', loss, itr_global)
                 logger.info(log)
 
                 itr_start_time = time.time()   
 
-            if itr % args.valid_every == 0:
-                valid_loader=torch.utils.data.DataLoader(dataset=valid_set, batch_size=config['batch_size'], shuffle=True, num_workers=1)
+            if itr_global % args.valid_every == 0:
+             
                 model.eval()
                 loss_records={}
 
-                for descs, apiseqs, desc_lens, api_lens in valid_loader:
-                    batch = [tensor.to(device) for tensor in [descs, desc_lens, apiseqs, api_lens]]
-                    valid_loss = model.valid(*batch)    
+                for batch in valid_loader:
+                    batch_gpu = [tensor.to(device) for tensor in batch]
+                    with torch.no_grad():
+                        valid_loss = model.valid(*batch_gpu)    
                     for loss_name, loss_value in valid_loss.items():
                         v=loss_records.get(loss_name, [])
                         v.append(loss_value)
@@ -138,7 +151,6 @@ def train(args):
                         tb_writer.add_scalar(loss_name, np.mean(loss_values), itr_global)                 
                 logger.info(log)    
 
-            itr += 1
             itr_global+=1        
 
             if itr_global % args.eval_every == 0:  # evaluate the model in the develop set
@@ -169,7 +181,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DeepAPI Pytorch')
     # Path Arguments
     parser.add_argument('--data_path', type=str, default='./data/', help='location of the data corpus')
-    parser.add_argument('--model', type=str, default='RNNSeq2Seq', help='model name: RNNSeq2Seq')
+    parser.add_argument('--model', type=str, default='RNNEncDec', help='model name: RNNEncDec')
     parser.add_argument('--expname', type=str, default='basic', help='experiment name, for disinguishing different parameter settings')
     parser.add_argument('-v', '--visual', action='store_true', default=False, help='visualize training status in tensorboard')
     parser.add_argument('--reload_from', type=int, default=-1, help='reload from a trained ephoch')
@@ -178,7 +190,7 @@ if __name__ == '__main__':
     # Evaluation Arguments
     parser.add_argument('--sample', action='store_true', help='sample when decoding for generation')
     parser.add_argument('--log_every', type=int, default=10, help='interval to log autoencoder training results')
-    parser.add_argument('--valid_every', type=int, default=100, help='interval to validation')
+    parser.add_argument('--valid_every', type=int, default=1000, help='interval to validation')
     parser.add_argument('--eval_every', type=int, default=5000, help='interval to evaluation to concrete results')
     parser.add_argument('--seed', type=int, default=1111, help='random seed')
 

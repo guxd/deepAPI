@@ -171,22 +171,21 @@ class RNNEncoder(nn.Module):
         if char_embedder is not None: 
             self.highway = Highway(self.emb_dim+char_embedder.emb_dim)
             self.comb_emb = nn.Linear(self.emb_dim+char_embedder.emb_dim, self.emb_dim)
-        self.rnn = nn.GRU(input_size, hidden_size, n_layers, batch_first=True, bidirectional=bidir)
+        self.rnn = nn.LSTM(input_size, hidden_size, num_layers=n_layers, batch_first=True, bidirectional=bidir)
         self.init_h = nn.Parameter(torch.randn(self.n_layers*(1+self.bidir), 1, self.hidden_size), requires_grad=True)#learnable h0
         self.init_weights()
         
     def init_weights(self):
         """ adopted from https://gist.github.com/jeasinema/ed9236ce743c8efaf30fa2ff732749f5 """
-        for w in self.rnn.parameters(): # initialize the gate weights with orthogonal
-            if len(w.shape)>1: 
-                weight_init.orthogonal_(w.data)
-            else:
-                weight_init.normal_(w.data)
-                
-    def store_grad_norm(self, grad):
-        norm = torch.norm(grad, 2, 1)
-        self.grad_norm = norm.detach().data.mean()
-        return grad
+        for name, param in self.rnn.named_parameters(): # initialize the gate weights 
+            # adopted from https://gist.github.com/jeasinema/ed9236ce743c8efaf30fa2ff732749f5
+            #if len(param.shape)>1:
+            #    weight_init.orthogonal_(param.data) 
+            #else:
+            #    weight_init.normal_(param.data)                
+            # adopted from fairseq
+            if 'weight' in name or 'bias' in name: 
+                param.data.uniform_(-0.1, 0.1)
     
     def forward(self, inputs, char_inputs=None, input_lens=None, init_h=None, noise=False): 
         # init_h: [n_layers*n_dir x batch_size x hid_size]
@@ -207,20 +206,22 @@ class RNNEncoder(nn.Module):
             inputs = pack_padded_sequence(inputs_sorted, input_lens_sorted.data.tolist(), batch_first=True)
         
         if init_h is None:
-            init_h = self.init_h.expand(-1,batch_size,-1).contiguous()# use learnable initial states, expanding along batches
+            init_h = self.init_h.expand(-1, batch_size,-1).contiguous()# use learnable initial states, expanding along batches
         #self.rnn.flatten_parameters() # time consuming!!
-        hids, h_n = self.rnn(inputs, init_h) # hids: [b x seq x (n_dir*hid_sz)]  
+        hids, (h_n, c_n) = self.rnn(inputs) # lstm
+        #hids, h_n = self.gru(inputs, init_h) # hids: [b x seq x (n_dir*hid_sz)]  
                                  # h_n: [(n_layers*n_dir) x batch_sz x hid_sz] (2=fw&bw)
         if input_lens is not None: # reorder and pad
             _, inv_indices = indices.sort()
-            hids, lens = pad_packed_sequence(hids, batch_first=True)     
+            hids, lens = pad_packed_sequence(hids, batch_first=True)  
+            hids = F.dropout(hids, p=0.25, training=self.training)
             hids = hids.index_select(0, inv_indices)
             h_n = h_n.index_select(1, inv_indices)
         h_n = h_n.view(self.n_layers, (1+self.bidir), batch_size, self.hidden_size) #[n_layers x n_dirs x batch_sz x hid_sz]
         h_n = h_n[-1] # get the last layer [n_dirs x batch_sz x hid_sz]
-        enc = h_n.transpose(1,0).contiguous().view(batch_size,-1) #[batch_sz x (n_dirs*hid_sz)]
-        #if enc.requires_grad:
-        #    enc.register_hook(self.store_grad_norm) # store grad norm 
+############commenting the following line significantly improves the performance, why? #####################################
+        #h_n = h_n.transpose(1,0).contiguous()
+        enc = h_n.view(batch_size,-1) #[batch_sz x (n_dirs*hid_sz)]
         # norms = torch.norm(enc, 2, 1) # normalize to unit ball (l2 norm of 1) - p=2, dim=1
         # enc = torch.div(enc, norms.unsqueeze(1).expand_as(enc)+1e-5)
         if noise and self.noise_radius > 0:
@@ -403,7 +404,7 @@ class RNNDecoder(nn.Module):
         device = init_h.device
         batch_size = init_h.size(0)
         decoded_words = torch.zeros((batch_size, maxlen), dtype=torch.long, device=device)  
-        sample_lens = torch.zeros((batch_size,1), dtype=torch.long, device=device)
+        sample_lens = torch.zeros((batch_size), dtype=torch.long, device=device)
         len_inc = torch.ones((batch_size), dtype=torch.long, device=device)
                
         x = torch.zeros((batch_size, 1), dtype=torch.long, device=device).fill_(SOS_ID)# [batch_sz x 1] (1=seq_len)
@@ -556,4 +557,21 @@ class BeamNode(object):
         print("[warning] two nodes have the same score (%d-%d), possible recursive (cycle) search."%(self.wordid, other.wordid)) 
         return self.len>=other.len 
     
- 
+
+     
+#########################################################################################################################    
+    
+from torch.optim.lr_scheduler import LambdaLR
+
+def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, num_cycles=.5, last_epoch=-1):
+    """ Create a schedule with a learning rate that decreases following the
+    values of the cosine function between 0 and `pi * cycles` after a warmup
+    period during which it increases linearly between 0 and 1.
+    """
+    def lr_lambda(current_step):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
+        return max(0., 0.5 * (1. + math.cos(math.pi * float(num_cycles) * 2. * progress)))
+
+    return LambdaLR(optimizer, lr_lambda, last_epoch)  

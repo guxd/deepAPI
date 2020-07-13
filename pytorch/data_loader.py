@@ -53,7 +53,7 @@ class APIDataset(data.Dataset):
         api = self.list2array(api, self.max_seq_len, np.int, PAD_ID)
         desc= self.list2array(desc, self.max_seq_len, np.int, PAD_ID)
         
-        return desc, api, desc_len, api_len
+        return desc, desc_len, api, api_len
 
     def __len__(self):
         return self.data_len

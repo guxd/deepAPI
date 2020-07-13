@@ -20,12 +20,12 @@ def config_DeepAPI():
     'epochs':30, # maximum number of epochs
     'min_epochs':2, # minimum number of epochs to train for
 
-    'lr_ae':1., # autoencoder learning rate
+    'lr':1., # autoencoder learning rate
     'clip':5.0,  # gradient clipping, max norm        
     }
     return conf 
 
-def config_RNNSeq2Seq():
+def config_RNNEncDec():
     conf = {
     'vocab_size':10000, # maximum vocabulary size 
     'max_sent_len':50, # maximum sequence length  
@@ -47,8 +47,9 @@ def config_RNNSeq2Seq():
     'epochs':30, # maximum number of epochs
     'min_epochs':2, # minimum number of epochs to train for
 
-    'lr_ae':1e-4, # autoencoder learning rate
-    'n_warmup_steps': 4000, #
+    'lr':1e-4, # autoencoder learning rate
+    'adam_epsilon':1e-8,
+    'warmup_steps': 4000, #
     'clip':1.0,  # gradient clipping, max norm        
     }
     return conf 

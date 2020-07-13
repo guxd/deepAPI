@@ -20,7 +20,7 @@ def evaluate(model, metrics, test_loader, vocab_desc, vocab_api, repeat, decode_
     
     recall_bleus, prec_bleus = [], []
     local_t = 0
-    for descs, apiseqs, desc_lens, api_lens in tqdm(test_loader):
+    for descs, desc_lens, apiseqs, api_lens in tqdm(test_loader):
         
         if local_t>1000:
             break        
@@ -28,7 +28,8 @@ def evaluate(model, metrics, test_loader, vocab_desc, vocab_api, repeat, decode_
         desc_str = indexes2sent(descs[0].numpy(), vocab_desc)
         
         descs, desc_lens = [tensor.to(device) for tensor in [descs, desc_lens]]
-        sample_words, sample_lens = model.sample(descs, desc_lens, repeat, decode_mode)
+        with torch.no_grad():
+            sample_words, sample_lens = model.sample(descs, desc_lens, repeat, decode_mode)
         # nparray: [repeat x seq_len]
         pred_sents, _ = indexes2sent(sample_words, vocab_api)
         pred_tokens = [sent.split(' ') for sent in pred_sents]
@@ -88,7 +89,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch DeepAPI for Eval')
     parser.add_argument('--data_path', type=str, default='./data/', help='location of the data corpus')
-    parser.add_argument('--model', type=str, default='RNNSeq2Seq', help='model name')
+    parser.add_argument('--model', type=str, default='RNNEncDec', help='model name')
     parser.add_argument('--expname', type=str, default='basic', help='experiment name, disinguishing different parameter settings')
     parser.add_argument('--timestamp', type=str, default='201909270147', help='time stamp')
     parser.add_argument('--reload_from', type=int, default=10000, help='directory to load models from')
