@@ -1,1 +1,1 @@
-from .seq2seq import RNNSeq2Seq
+from .rnn_seq2seq import RNNEncDec
