@@ -221,7 +221,9 @@ class RNNEncoder(nn.Module):
         h_n = h_n[-1] # get the last layer [n_dirs x batch_sz x hid_sz]
 ############commenting the following line significantly improves the performance, why? #####################################
         #h_n = h_n.transpose(1,0).contiguous()
-        enc = h_n.view(batch_size,-1) #[batch_sz x (n_dirs*hid_sz)]
+        #enc = h_n.view(batch_size,-1) #[batch_sz x (n_dirs*hid_sz)]
+        enc = torch.cat((h_n[0], h_n[1]), dim=1)
+        
         # norms = torch.norm(enc, 2, 1) # normalize to unit ball (l2 norm of 1) - p=2, dim=1
         # enc = torch.div(enc, norms.unsqueeze(1).expand_as(enc)+1e-5)
         if noise and self.noise_radius > 0:
@@ -557,7 +559,7 @@ class BeamNode(object):
         print("[warning] two nodes have the same score (%d-%d), possible recursive (cycle) search."%(self.wordid, other.wordid)) 
         return self.len>=other.len 
     
-
+ 
      
 #########################################################################################################################    
     
