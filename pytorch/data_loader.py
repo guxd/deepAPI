@@ -50,8 +50,8 @@ class APIDataset(data.Dataset):
         desc= [SOS_ID] + self.desc_data[pos: pos+ desc_len].tolist() + [EOS_ID]
        
         ## Padding ##
-        api = self.list2array(api, self.max_seq_len, np.int, PAD_ID)
-        desc= self.list2array(desc, self.max_seq_len, np.int, PAD_ID)
+        api = self.list2array(api, self.max_seq_len, np.long, PAD_ID)
+        desc= self.list2array(desc, self.max_seq_len, np.long, PAD_ID)
         
         return desc, desc_len, api, api_len
 
